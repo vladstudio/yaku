@@ -1,0 +1,114 @@
+// service-worker.js — Background coordinator
+// Routes messages between popup and content scripts, manages badge icon
+
+const tabState = {};  // tabId → { status, detectedLang, from, to, progress }
+
+function getState(tabId) {
+  if (!tabState[tabId]) {
+    tabState[tabId] = { status: 'idle', detectedLang: null, from: 'auto', to: 'en', progress: 0 };
+  }
+  return tabState[tabId];
+}
+
+function updateBadge(tabId, progress) {
+  const frame = Math.min(23, Math.floor(progress * 24));
+  chrome.action.setIcon({
+    path: { 16: `icons/progress_${String(frame).padStart(2, '0')}.svg`, 32: `icons/progress_${String(frame).padStart(2, '0')}.svg` },
+    tabId,
+  });
+}
+
+function resetBadge(tabId) {
+  chrome.action.setIcon({
+    path: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' },
+    tabId,
+  });
+}
+
+// Messages from content.js (via bridge) and popup
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const tabId = sender.tab?.id;
+
+  // Messages from content script (via bridge)
+  if (msg.source === 'yaku-content') {
+    if (!tabId) return;
+    const state = getState(tabId);
+
+    if (msg.type === 'yaku-detected') {
+      state.detectedLang = msg.language;
+      state.confidence = msg.confidence;
+    }
+
+    if (msg.type === 'yaku-status') {
+      state.status = msg.status;
+      if (msg.status === 'translating') updateBadge(tabId, 0);
+    }
+
+    if (msg.type === 'yaku-download') {
+      state.status = 'downloading';
+      state.downloadProgress = msg.progress;
+    }
+
+    if (msg.type === 'yaku-progress') {
+      state.progress = msg.progress;
+      updateBadge(tabId, msg.progress);
+    }
+
+    if (msg.type === 'yaku-done') {
+      state.status = 'done';
+      state.from = msg.from;
+      state.to = msg.to;
+      state.progress = 1;
+      resetBadge(tabId);
+    }
+
+    if (msg.type === 'yaku-error') {
+      state.status = 'error';
+      state.error = msg.error;
+      resetBadge(tabId);
+    }
+
+    if (msg.type === 'yaku-cancelled' || msg.type === 'yaku-restored') {
+      state.status = 'idle';
+      state.progress = 0;
+      resetBadge(tabId);
+    }
+    return;
+  }
+
+  // Messages from popup
+  if (msg.type === 'getState') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) sendResponse(getState(tabs[0].id));
+      else sendResponse({ status: 'idle' });
+    });
+    return true; // async sendResponse
+  }
+
+  if (msg.type === 'translate' || msg.type === 'cancel' || msg.type === 'restore') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        const state = getState(tabs[0].id);
+        if (msg.type === 'translate') {
+          state.status = 'detecting';
+          state.from = msg.from;
+          state.to = msg.to;
+        }
+        chrome.tabs.sendMessage(tabs[0].id, msg);
+      }
+    });
+  }
+});
+
+// Clean up state when tab is closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  delete tabState[tabId];
+});
+
+// Request language detection when tab finishes loading
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'complete') {
+    delete tabState[tabId];
+    chrome.tabs.sendMessage(tabId, { type: 'detect' }).catch(() => {});
+  }
+});
