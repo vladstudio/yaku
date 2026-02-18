@@ -131,6 +131,7 @@ const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
 const favsEl = document.getElementById('favs');
 const cancelBtn = document.getElementById('cancelBtn');
+const modeToggle = document.getElementById('modeToggle');
 const settingsToggle = document.getElementById('settingsToggle');
 const settingsPanel = document.getElementById('settingsPanel');
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -254,7 +255,8 @@ function doTranslate() {
     return;
   }
 
-  chrome.runtime.sendMessage({ type: 'translate', from, to });
+  const mode = modeToggle.querySelector('.active').dataset.mode;
+  chrome.runtime.sendMessage({ type: 'translate', from, to, mode });
   renderState({ status: 'detecting' });
 }
 
@@ -335,6 +337,24 @@ chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
 });
 
 setInterval(pollState, 500);
+
+// Mode toggle
+modeToggle.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  modeToggle.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+});
+
+// Check if page has a text selection, enable/disable Selection button
+chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+  if (!tab) return;
+  chrome.tabs.sendMessage(tab.id, { type: 'hasSelection' }, (has) => {
+    if (chrome.runtime.lastError) return;
+    const selBtn = modeToggle.querySelector('[data-mode="selection"]');
+    selBtn.disabled = !has;
+  });
+});
 
 for (const el of document.querySelectorAll('input[list]')) el.addEventListener('focus', () => el.select());
 toEl.addEventListener('input', () => chrome.storage.local.get('favLangs', ({ favLangs }) => renderFavs(favLangs || [])));

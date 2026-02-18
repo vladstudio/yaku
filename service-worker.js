@@ -96,6 +96,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           state.status = 'detecting';
           state.from = msg.from;
           state.to = msg.to;
+          state.mode = msg.mode;
         } else {
           state.status = 'idle';
           state.progress = 0;

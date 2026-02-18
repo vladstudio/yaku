@@ -170,8 +170,11 @@
     chrome.runtime.sendMessage({ ...data, source: 'yaku-content' });
   }
 
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === 'detect') {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'hasSelection') {
+      sendResponse(window.getSelection().toString().trim().length > 0);
+      return;
+    } else if (msg.type === 'detect') {
       handleDetect();
     } else if (msg.type === 'translate') {
       handleTranslate(msg);
@@ -238,15 +241,29 @@
       // Create translator
       translator = YakuTranslator.create(sourceLang, msg.to);
 
-      // Translate page
+      // Translate page or selection
       sendStatus({ type: 'yaku-status', status: 'translating' });
-      const textNodes = getTextNodes(document.body);
+      let textNodes;
+      if (msg.mode === 'selection') {
+        const sel = window.getSelection();
+        textNodes = [];
+        for (let i = 0; i < sel.rangeCount; i++) {
+          const range = sel.getRangeAt(i);
+          const container = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+            ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement;
+          for (const n of getTextNodes(container || document.body)) {
+            if (range.intersectsNode(n)) textNodes.push(n);
+          }
+        }
+      } else {
+        textNodes = getTextNodes(document.body);
+      }
       await translateNodes(textNodes, (progress) => {
         sendStatus({ type: 'yaku-progress', progress });
       });
 
       if (!signal.aborted) {
-        startObserver();
+        if (msg.mode !== 'selection') startObserver();
         sendStatus({ type: 'yaku-done', from: sourceLang, to: msg.to });
       }
     } catch (e) {
