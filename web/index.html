@@ -20,7 +20,7 @@
     }
 
     main {
-      max-width: 480px;
+      max-width: 640px;
       text-align: center;
     }
 
@@ -102,6 +102,29 @@
       color: #F86C26;
       text-decoration: none;
     }
+
+    .card {
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 2rem auto 0;
+      position: relative;
+    }
+
+    .card img {
+      display: block;
+      width: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      opacity: 0;
+      transition: opacity 0.6s;
+    }
+
+    .card img.active {
+      position: relative;
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -131,7 +154,21 @@
       <a class="cta-primary" href="https://chromewebstore.google.com/detail/yaku-page-translator/TODO">Chrome Web Store</a>
       <a class="cta-secondary" href="https://github.com/vladstudio/yaku">GitHub</a>
     </div>
+    <div class="card">
+      <img src="1.webp" class="active" alt="Yaku screenshot">
+      <img src="2.webp" alt="Yaku screenshot">
+    </div>
   </main>
+
+  <script>
+    const imgs = document.querySelectorAll('.card img');
+    let i = 0;
+    setInterval(() => {
+      imgs[i].classList.remove('active');
+      i = (i + 1) % imgs.length;
+      imgs[i].classList.add('active');
+    }, 2000);
+  </script>
 
   <footer>
     Made by <a href="https://vlad.studio">vlad.studio</a>
