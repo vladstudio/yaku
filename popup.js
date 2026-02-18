@@ -1,64 +1,172 @@
 // popup.js — Extension popup UI logic
 
+// [code, English name, native name]
 const LANGUAGES = [
-  ['auto', 'Auto-detect'],
-  ['en', 'English'],
-  ['ru', 'Russian'],
-  ['de', 'German'],
-  ['fr', 'French'],
-  ['es', 'Spanish'],
-  ['it', 'Italian'],
-  ['pt', 'Portuguese'],
-  ['nl', 'Dutch'],
-  ['pl', 'Polish'],
-  ['uk', 'Ukrainian'],
-  ['ja', 'Japanese'],
-  ['ko', 'Korean'],
-  ['zh', 'Chinese'],
-  ['ar', 'Arabic'],
-  ['hi', 'Hindi'],
-  ['tr', 'Turkish'],
-  ['vi', 'Vietnamese'],
-  ['th', 'Thai'],
-  ['sv', 'Swedish'],
-  ['da', 'Danish'],
-  ['fi', 'Finnish'],
-  ['cs', 'Czech'],
-  ['ro', 'Romanian'],
-  ['hu', 'Hungarian'],
-  ['el', 'Greek'],
-  ['he', 'Hebrew'],
-  ['id', 'Indonesian'],
+  ['af', 'Afrikaans', 'Afrikaans'],
+  ['sq', 'Albanian', 'Shqip'],
+  ['am', 'Amharic', 'አማርኛ'],
+  ['ar', 'Arabic', 'العربية'],
+  ['hy', 'Armenian', 'Հայերեն'],
+  ['az', 'Azerbaijani', 'Azərbaycan'],
+  ['eu', 'Basque', 'Euskara'],
+  ['be', 'Belarusian', 'Беларуская'],
+  ['bn', 'Bengali', 'বাংলা'],
+  ['bs', 'Bosnian', 'Bosanski'],
+  ['bg', 'Bulgarian', 'Български'],
+  ['ca', 'Catalan', 'Català'],
+  ['ceb', 'Cebuano', 'Cebuano'],
+  ['zh', 'Chinese', '中文'],
+  ['co', 'Corsican', 'Corsu'],
+  ['hr', 'Croatian', 'Hrvatski'],
+  ['cs', 'Czech', 'Čeština'],
+  ['da', 'Danish', 'Dansk'],
+  ['nl', 'Dutch', 'Nederlands'],
+  ['en', 'English', 'English'],
+  ['eo', 'Esperanto', 'Esperanto'],
+  ['et', 'Estonian', 'Eesti'],
+  ['fi', 'Finnish', 'Suomi'],
+  ['fr', 'French', 'Français'],
+  ['fy', 'Frisian', 'Frysk'],
+  ['gl', 'Galician', 'Galego'],
+  ['ka', 'Georgian', 'ქართული'],
+  ['de', 'German', 'Deutsch'],
+  ['el', 'Greek', 'Ελληνικά'],
+  ['gu', 'Gujarati', 'ગુજરાતી'],
+  ['ht', 'Haitian Creole', 'Kreyòl Ayisyen'],
+  ['ha', 'Hausa', 'Hausa'],
+  ['haw', 'Hawaiian', 'ʻŌlelo Hawaiʻi'],
+  ['he', 'Hebrew', 'עברית'],
+  ['hi', 'Hindi', 'हिन्दी'],
+  ['hmn', 'Hmong', 'Hmong'],
+  ['hu', 'Hungarian', 'Magyar'],
+  ['is', 'Icelandic', 'Íslenska'],
+  ['ig', 'Igbo', 'Igbo'],
+  ['id', 'Indonesian', 'Bahasa Indonesia'],
+  ['ga', 'Irish', 'Gaeilge'],
+  ['it', 'Italian', 'Italiano'],
+  ['ja', 'Japanese', '日本語'],
+  ['jv', 'Javanese', 'Jawa'],
+  ['kn', 'Kannada', 'ಕನ್ನಡ'],
+  ['kk', 'Kazakh', 'Қазақ'],
+  ['km', 'Khmer', 'ភាសាខ្មែរ'],
+  ['rw', 'Kinyarwanda', 'Kinyarwanda'],
+  ['ko', 'Korean', '한국어'],
+  ['ku', 'Kurdish', 'Kurdî'],
+  ['ky', 'Kyrgyz', 'Кыргызча'],
+  ['lo', 'Lao', 'ລາວ'],
+  ['la', 'Latin', 'Latina'],
+  ['lv', 'Latvian', 'Latviešu'],
+  ['lt', 'Lithuanian', 'Lietuvių'],
+  ['lb', 'Luxembourgish', 'Lëtzebuergesch'],
+  ['mk', 'Macedonian', 'Македонски'],
+  ['mg', 'Malagasy', 'Malagasy'],
+  ['ms', 'Malay', 'Bahasa Melayu'],
+  ['ml', 'Malayalam', 'മലയാളം'],
+  ['mt', 'Maltese', 'Malti'],
+  ['mi', 'Maori', 'Māori'],
+  ['mr', 'Marathi', 'मराठी'],
+  ['mn', 'Mongolian', 'Монгол'],
+  ['my', 'Myanmar', 'ဗမာ'],
+  ['ne', 'Nepali', 'नेपाली'],
+  ['no', 'Norwegian', 'Norsk'],
+  ['ny', 'Nyanja', 'Chichewa'],
+  ['or', 'Odia', 'ଓଡ଼ିଆ'],
+  ['ps', 'Pashto', 'پښتو'],
+  ['fa', 'Persian', 'فارسی'],
+  ['pl', 'Polish', 'Polski'],
+  ['pt', 'Portuguese', 'Português'],
+  ['pa', 'Punjabi', 'ਪੰਜਾਬੀ'],
+  ['ro', 'Romanian', 'Română'],
+  ['ru', 'Russian', 'Русский'],
+  ['sm', 'Samoan', 'Gagana Sāmoa'],
+  ['gd', 'Scots Gaelic', 'Gàidhlig'],
+  ['sr', 'Serbian', 'Српски'],
+  ['st', 'Sesotho', 'Sesotho'],
+  ['sn', 'Shona', 'Shona'],
+  ['sd', 'Sindhi', 'سنڌي'],
+  ['si', 'Sinhala', 'සිංහල'],
+  ['sk', 'Slovak', 'Slovenčina'],
+  ['sl', 'Slovenian', 'Slovenščina'],
+  ['so', 'Somali', 'Soomaali'],
+  ['es', 'Spanish', 'Español'],
+  ['su', 'Sundanese', 'Basa Sunda'],
+  ['sw', 'Swahili', 'Kiswahili'],
+  ['sv', 'Swedish', 'Svenska'],
+  ['tl', 'Tagalog', 'Filipino'],
+  ['tg', 'Tajik', 'Тоҷикӣ'],
+  ['ta', 'Tamil', 'தமிழ்'],
+  ['tt', 'Tatar', 'Татар'],
+  ['te', 'Telugu', 'తెలుగు'],
+  ['th', 'Thai', 'ไทย'],
+  ['tr', 'Turkish', 'Türkçe'],
+  ['tk', 'Turkmen', 'Türkmen'],
+  ['uk', 'Ukrainian', 'Українська'],
+  ['ur', 'Urdu', 'اردو'],
+  ['ug', 'Uyghur', 'ئۇيغۇرچە'],
+  ['uz', 'Uzbek', 'Oʻzbek'],
+  ['vi', 'Vietnamese', 'Tiếng Việt'],
+  ['cy', 'Welsh', 'Cymraeg'],
+  ['xh', 'Xhosa', 'isiXhosa'],
+  ['yi', 'Yiddish', 'ייִדיש'],
+  ['yo', 'Yoruba', 'Yorùbá'],
+  ['zu', 'Zulu', 'isiZulu'],
 ];
 
-const LANG_NAMES = Object.fromEntries(LANGUAGES);
+// Lookup: English name → code, code → English name
+const NAME_TO_CODE = {};
+const CODE_TO_NAME = {};
+for (const [code, name] of LANGUAGES) {
+  NAME_TO_CODE[name] = code;
+  CODE_TO_NAME[code] = name;
+}
 
 const controlsEl = document.getElementById('controls');
 const fromEl = document.getElementById('from');
 const toEl = document.getElementById('to');
+const fromList = document.getElementById('fromList');
+const toList = document.getElementById('toList');
 const btn = document.getElementById('btn');
 const statusEl = document.getElementById('status');
 const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
+const settingsToggle = document.getElementById('settingsToggle');
+const settingsPanel = document.getElementById('settingsPanel');
+const apiKeyInput = document.getElementById('apiKeyInput');
+const apiKeySave = document.getElementById('apiKeySave');
 
-function populateSelects(detectedLang) {
-  fromEl.innerHTML = '';
-  toEl.innerHTML = '';
+function populateLists(detectedLang) {
+  fromList.innerHTML = '';
+  toList.innerHTML = '';
 
-  for (const [code, name] of LANGUAGES) {
-    const label = code === 'auto' && detectedLang && detectedLang !== 'und'
-      ? `Auto-detect (${LANG_NAMES[detectedLang] || detectedLang})`
-      : name;
-
-    if (code === 'auto') {
-      fromEl.add(new Option(label, code));
-    } else {
-      fromEl.add(new Option(name, code));
-      toEl.add(new Option(name, code));
-    }
+  for (const [code, name, native] of LANGUAGES) {
+    const searchHint = native !== name ? `${code} · ${native}` : code;
+    const opt = new Option(searchHint, name);
+    toList.append(opt);
+    fromList.append(opt.cloneNode(true));
   }
 
-  toEl.value = 'en';
+  // Update placeholder with detected language
+  if (detectedLang && detectedLang !== 'und') {
+    const detected = CODE_TO_NAME[detectedLang] || detectedLang;
+    fromEl.placeholder = `Auto-detect (${detected})`;
+  } else {
+    fromEl.placeholder = 'Auto-detect';
+  }
+}
+
+function resolveLanguage(input) {
+  const val = input.value.trim();
+  if (!val) return null;
+  // Exact English name match
+  if (NAME_TO_CODE[val]) return NAME_TO_CODE[val];
+  // Exact code match
+  if (CODE_TO_NAME[val]) return val;
+  // Case-insensitive name match
+  const lower = val.toLowerCase();
+  for (const [code, name] of LANGUAGES) {
+    if (name.toLowerCase() === lower) return code;
+  }
+  return null;
 }
 
 function setProgress(pct) {
@@ -81,27 +189,10 @@ function renderState(state) {
     btn.onclick = doTranslate;
     statusEl.textContent = '';
     setProgress(0);
-  } else if (s === 'detecting' || s === 'preparing') {
+  } else if (s === 'detecting') {
     showControls(false);
-    statusEl.textContent = s === 'detecting' ? 'Detecting language…' : 'Preparing…';
+    statusEl.textContent = 'Detecting language…';
     setProgress(0);
-  } else if (s === 'downloading') {
-    showControls(false);
-    const dp = state.downloadProgress || 0;
-    const pct = Math.round(dp * 100);
-    statusEl.textContent = '';
-    const pctEl = document.createElement('div');
-    pctEl.className = 'download-pct';
-    pctEl.textContent = `${pct}%`;
-    const labelEl = document.createElement('div');
-    labelEl.style.cssText = 'text-align:center;font-size:11px;color:#888;margin-bottom:10px';
-    labelEl.textContent = 'Downloading language model…';
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.className = 'cancel';
-    cancelBtn.onclick = doCancel;
-    statusEl.append(pctEl, labelEl, cancelBtn);
-    setProgress(dp);
   } else if (s === 'translating') {
     showControls(false);
     const p = state.progress || 0;
@@ -109,7 +200,7 @@ function renderState(state) {
     setProgress(p);
   } else if (s === 'done') {
     showControls(true);
-    const langName = LANG_NAMES[state.to] || state.to;
+    const langName = CODE_TO_NAME[state.to] || state.to;
     btn.textContent = 'Translate';
     btn.className = '';
     btn.disabled = false;
@@ -136,11 +227,27 @@ function renderState(state) {
 }
 
 function doTranslate() {
-  chrome.runtime.sendMessage({
-    type: 'translate',
-    from: fromEl.value,
-    to: toEl.value,
-  });
+  const from = fromEl.value.trim() ? resolveLanguage(fromEl) : 'auto';
+  const to = resolveLanguage(toEl);
+
+  if (from === null) {
+    statusEl.textContent = '';
+    const err = document.createElement('span');
+    err.className = 'error';
+    err.textContent = 'Unknown source language.';
+    statusEl.append(err);
+    return;
+  }
+  if (!to) {
+    statusEl.textContent = '';
+    const err = document.createElement('span');
+    err.className = 'error';
+    err.textContent = 'Select a target language.';
+    statusEl.append(err);
+    return;
+  }
+
+  chrome.runtime.sendMessage({ type: 'translate', from, to });
   renderState({ status: 'detecting' });
 }
 
@@ -161,13 +268,36 @@ function pollState() {
   });
 }
 
+// Settings
+settingsToggle.onclick = () => {
+  settingsPanel.hidden = !settingsPanel.hidden;
+};
+
+apiKeySave.onclick = () => {
+  const key = apiKeyInput.value.trim();
+  if (key) {
+    chrome.storage.local.set({ apiKey: key });
+    settingsPanel.hidden = true;
+    settingsToggle.textContent = 'API Key ✓';
+  }
+};
+
 // Init
+chrome.storage.local.get('apiKey', ({ apiKey }) => {
+  if (apiKey) {
+    apiKeyInput.value = apiKey;
+    settingsToggle.textContent = 'API Key ✓';
+  }
+});
+
 chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
-  populateSelects(state?.detectedLang ?? null);
+  populateLists(state?.detectedLang ?? null);
   if (state) {
-    if (state.from && state.from !== 'auto') fromEl.value = state.from;
-    if (state.to) toEl.value = state.to;
+    if (state.from && state.from !== 'auto') fromEl.value = CODE_TO_NAME[state.from] || '';
+    if (state.to) toEl.value = CODE_TO_NAME[state.to] || 'English';
     renderState(state);
+  } else {
+    toEl.value = 'English';
   }
 });
 

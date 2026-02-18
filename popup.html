@@ -12,13 +12,14 @@ body {
 }
 .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 label { font-size: 11px; color: #666; min-width: 34px; }
-select {
+input[type="text"] {
   flex: 1;
   padding: 4px 6px;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 12px;
   background: #fff;
+  min-width: 0;
 }
 button {
   width: 100%;
@@ -60,14 +61,39 @@ button:disabled { opacity: 0.5; cursor: default; }
   width: 0%;
   transition: width 0.3s;
 }
-.download-pct {
-  font-size: 28px;
-  font-weight: 600;
-  color: #F86C26;
-  text-align: center;
-  margin: 8px 0 4px;
-}
 .error { color: #c33; font-size: 12px; text-align: center; margin-top: 6px; }
+.settings {
+  margin-top: 10px;
+  border-top: 1px solid #eee;
+  padding-top: 8px;
+}
+.settings-toggle {
+  width: auto;
+  background: none;
+  color: #999;
+  font-size: 11px;
+  padding: 2px 0;
+  font-weight: 400;
+}
+.settings-toggle:hover { background: none; color: #666; }
+.api-key-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.api-key-row input {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: monospace;
+}
+.api-key-row button {
+  width: auto;
+  padding: 4px 10px;
+  font-size: 11px;
+}
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -75,18 +101,31 @@ button:disabled { opacity: 0.5; cursor: default; }
   <div id="controls">
     <div class="row">
       <label>From</label>
-      <select id="from">
-        <option value="auto">Auto-detect</option>
-      </select>
+      <input type="text" id="from" list="fromList" placeholder="Auto-detect">
+      <datalist id="fromList"></datalist>
     </div>
     <div class="row">
       <label>To</label>
-      <select id="to"></select>
+      <input type="text" id="to" list="toList" placeholder="Language">
+      <datalist id="toList"></datalist>
     </div>
     <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
     <button id="btn">Translate</button>
   </div>
   <div class="status" id="status"></div>
+  <div class="settings">
+    <button class="settings-toggle" id="settingsToggle">API Key</button>
+    <div id="settingsPanel" hidden>
+      <div class="api-key-row">
+        <input type="password" id="apiKeyInput" placeholder="Google Cloud API key">
+        <button id="apiKeySave">Save</button>
+      </div>
+      <div style="font-size:10px;color:#999;margin-top:4px">
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#999">Get a key</a> (enable Cloud Translation API)
+      </div>
+    </div>
+  </div>
 <script src="popup.js"></script>
+<script>for (const el of document.querySelectorAll('input[list]')) el.addEventListener('focus', () => el.select());</script>
 </body>
 </html>

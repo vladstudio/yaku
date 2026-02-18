@@ -1,4 +1,4 @@
-// content.js — MAIN world script
+// content.js — ISOLATED world script
 // Handles DOM traversal, translation, and MutationObserver
 
 (() => {
@@ -125,9 +125,8 @@
 
       if (newTextNodes.length > 0 && translator) {
         const work = () => translateNodes(newTextNodes, (p) => {
-          postMessage({ type: 'yaku-progress', progress: p, incremental: true });
+          sendStatus({ type: 'yaku-progress', progress: p, incremental: true });
         });
-        // Serialize: queue behind any in-flight mutation translation
         mutationQueue = (mutationQueue || Promise.resolve()).then(work, work);
       }
     });
@@ -158,92 +157,85 @@
     mutationQueue = null;
   }
 
-  // --- Message handling (from bridge.js via postMessage) ---
+  // --- Message handling (from service worker via chrome.runtime) ---
 
-  function postMessage(data) {
-    window.postMessage({ ...data, source: 'yaku-content' }, location.origin);
+  function sendStatus(data) {
+    chrome.runtime.sendMessage({ ...data, source: 'yaku-content' });
   }
 
-  window.addEventListener('message', async (event) => {
-    if (event.source !== window || event.data?.source !== 'yaku-bridge') return;
-
-    const msg = event.data;
-
+  chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'detect') {
-      try {
-        const result = await YakuTranslator.detectLanguage();
-        postMessage({ type: 'yaku-detected', ...result });
-      } catch (e) {
-        postMessage({ type: 'yaku-detected', language: 'und', confidence: 0 });
-      }
+      handleDetect();
     } else if (msg.type === 'translate') {
-      if (isTranslating) return;
-      isTranslating = true;
-      abortController = new AbortController();
-
-      const signal = abortController.signal;
-      try {
-        // Auto-detect if needed
-        let sourceLang = msg.from;
-        if (sourceLang === 'auto') {
-          postMessage({ type: 'yaku-status', status: 'detecting' });
-          const detected = await YakuTranslator.detectLanguage();
-          if (signal.aborted) { isTranslating = false; return; }
-          sourceLang = detected.language;
-          if (sourceLang === 'und') {
-            postMessage({ type: 'yaku-error', error: 'Could not detect page language.' });
-            isTranslating = false;
-            return;
-          }
-          postMessage({ type: 'yaku-detected', language: sourceLang, confidence: detected.confidence });
-        }
-
-        if (signal.aborted) { isTranslating = false; return; }
-
-        // Create translator (may trigger model download)
-        postMessage({ type: 'yaku-status', status: 'preparing' });
-        translator = await YakuTranslator.create(sourceLang, msg.to, {
-          signal,
-          onProgress(ev) {
-            if (ev.type === 'download') postMessage({ type: 'yaku-download', progress: ev.progress });
-          },
-        });
-
-        if (signal.aborted) { translator.destroy(); translator = null; isTranslating = false; return; }
-
-        // Translate page
-        postMessage({ type: 'yaku-status', status: 'translating' });
-        const textNodes = getTextNodes(document.body);
-        await translateNodes(textNodes, (progress) => {
-          postMessage({ type: 'yaku-progress', progress });
-        });
-
-        if (!signal.aborted) {
-          startObserver();
-          postMessage({ type: 'yaku-done', from: sourceLang, to: msg.to });
-        }
-      } catch (e) {
-        if (!signal.aborted) {
-          postMessage({ type: 'yaku-error', error: e.message });
-        }
-      }
-
-      isTranslating = false;
+      handleTranslate(msg);
     } else if (msg.type === 'cancel') {
       if (abortController) abortController.abort();
       restoreOriginals();
-      postMessage({ type: 'yaku-cancelled' });
+      sendStatus({ type: 'yaku-cancelled' });
     } else if (msg.type === 'restore') {
       restoreOriginals();
-      postMessage({ type: 'yaku-restored' });
+      sendStatus({ type: 'yaku-restored' });
     }
   });
 
-  // Auto-detect language on load and report to bridge
-  setTimeout(async () => {
+  async function handleDetect() {
     try {
       const result = await YakuTranslator.detectLanguage();
-      postMessage({ type: 'yaku-detected', ...result });
-    } catch {}
-  }, 500);
+      sendStatus({ type: 'yaku-detected', ...result });
+    } catch {
+      sendStatus({ type: 'yaku-detected', language: 'und', confidence: 0 });
+    }
+  }
+
+  async function handleTranslate(msg) {
+    if (isTranslating) return;
+    isTranslating = true;
+    abortController = new AbortController();
+    const signal = abortController.signal;
+
+    try {
+      const apiKey = await YakuTranslator.getApiKey();
+
+      // Auto-detect if needed
+      let sourceLang = msg.from;
+      if (sourceLang === 'auto') {
+        sendStatus({ type: 'yaku-status', status: 'detecting' });
+        const detected = await YakuTranslator.detectLanguage();
+        if (signal.aborted) { isTranslating = false; return; }
+        sourceLang = detected.language;
+        if (sourceLang === 'und') {
+          sendStatus({ type: 'yaku-error', error: 'Could not detect page language.' });
+          isTranslating = false;
+          return;
+        }
+        sendStatus({ type: 'yaku-detected', language: sourceLang, confidence: detected.confidence });
+      }
+
+      if (signal.aborted) { isTranslating = false; return; }
+
+      // Create translator
+      translator = YakuTranslator.create(sourceLang, msg.to, apiKey);
+
+      // Translate page
+      sendStatus({ type: 'yaku-status', status: 'translating' });
+      const textNodes = getTextNodes(document.body);
+      await translateNodes(textNodes, (progress) => {
+        sendStatus({ type: 'yaku-progress', progress });
+      });
+
+      if (!signal.aborted) {
+        startObserver();
+        sendStatus({ type: 'yaku-done', from: sourceLang, to: msg.to });
+      }
+    } catch (e) {
+      if (!signal.aborted) {
+        sendStatus({ type: 'yaku-error', error: e.message });
+      }
+    }
+
+    isTranslating = false;
+  }
+
+  // Auto-detect language on load
+  setTimeout(handleDetect, 500);
 })();

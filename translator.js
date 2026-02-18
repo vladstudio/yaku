@@ -1,15 +1,15 @@
-// translator.js — Translation engine abstraction (MAIN world)
-// Today: Chrome Translator API. Swappable for DeepL, LLM, Ollama, etc.
+// translator.js — Translation engine: Google Cloud Translation API v2
 
 const YakuTranslator = (() => {
-  // --- Language Detection (3-layer) ---
+  const API_BASE = 'https://translation.googleapis.com/language/translate/v2';
 
-  function withTimeout(promise, ms) {
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
-    ]);
+  async function getApiKey() {
+    const { apiKey } = await chrome.storage.local.get('apiKey');
+    if (!apiKey) throw new Error('API key not set. Click the gear icon in the popup.');
+    return apiKey;
   }
+
+  // --- Language Detection (3-layer) ---
 
   async function detectLanguage(sampleText) {
     // Layer 1: <html lang="...">
@@ -20,24 +20,23 @@ const YakuTranslator = (() => {
     const metaLang = document.querySelector('meta[http-equiv="content-language"]')?.content?.split('-')[0];
     if (metaLang) return { language: metaLang, confidence: 0.7 };
 
-    // Layer 3: LanguageDetector API (with timeout — create() can hang if model needs download)
-    if ('LanguageDetector' in self) {
-      try {
-        const status = await withTimeout(LanguageDetector.availability(), 3000);
-        if (status === 'available') {
-          const detector = await withTimeout(LanguageDetector.create(), 5000);
-          try {
-            const text = sampleText || document.body.innerText.slice(0, 500);
-            const results = await withTimeout(detector.detect(text), 5000);
-            const top = results.find(r => r.detectedLanguage !== 'und');
-            if (top) return { language: top.detectedLanguage, confidence: top.confidence };
-          } finally {
-            detector.destroy();
-          }
-        }
-      } catch {
-        // Timeout or API error — fall through
+    // Layer 3: Google Translate detect API
+    try {
+      const apiKey = await getApiKey();
+      const text = sampleText || document.body.innerText.slice(0, 500);
+      const res = await fetch(`${API_BASE}/detect?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: text }),
+      });
+      if (!res.ok) throw new Error(`Detection API error: ${res.status}`);
+      const data = await res.json();
+      const top = data.data.detections[0]?.[0];
+      if (top && top.language !== 'und') {
+        return { language: top.language, confidence: top.confidence };
       }
+    } catch {
+      // Fall through
     }
 
     return { language: 'und', confidence: 0 };
@@ -45,40 +44,30 @@ const YakuTranslator = (() => {
 
   // --- Translation Engine ---
 
-  async function create(sourceLang, targetLang, { onProgress, signal } = {}) {
-    if (!('Translator' in self)) {
-      throw new Error('Chrome Translator API not available. Requires Chrome 138+.');
-    }
-
-    const availability = await Translator.availability({
-      sourceLanguage: sourceLang,
-      targetLanguage: targetLang,
-    });
-
-    if (availability === 'unavailable') {
-      throw new Error(`Translation ${sourceLang} → ${targetLang} is not supported.`);
-    }
-
-    const needsDownload = availability !== 'available';
-    const options = { sourceLanguage: sourceLang, targetLanguage: targetLang };
-    if (signal) options.signal = signal;
-
-    if (needsDownload) {
-      options.monitor = (m) => {
-        m.addEventListener('downloadprogress', (e) => {
-          onProgress?.({ type: 'download', progress: e.loaded });
-        });
-      };
-    }
-
-    const instance = await Translator.create(options);
-
+  function create(sourceLang, targetLang, apiKey) {
     return {
-      translate: (text) => instance.translate(text),
-      destroy: () => instance.destroy(),
-      needsDownload,
+      async translate(text) {
+        const res = await fetch(`${API_BASE}?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            q: text,
+            source: sourceLang,
+            target: targetLang,
+            format: 'text',
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const msg = err.error?.message || `API error: ${res.status}`;
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        return data.data.translations[0].translatedText;
+      },
+      destroy() {},
     };
   }
 
-  return { detectLanguage, create };
+  return { detectLanguage, create, getApiKey };
 })();

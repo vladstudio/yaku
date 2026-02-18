@@ -11,25 +11,20 @@ function getState(tabId) {
 }
 
 function updateBadge(tabId, progress) {
-  const frame = Math.min(23, Math.floor(progress * 24));
-  chrome.action.setIcon({
-    path: { 16: `icons/progress_${String(frame).padStart(2, '0')}.svg`, 32: `icons/progress_${String(frame).padStart(2, '0')}.svg` },
-    tabId,
-  });
+  const pct = Math.round(progress * 100);
+  chrome.action.setBadgeText({ text: `${pct}%`, tabId });
+  chrome.action.setBadgeBackgroundColor({ color: '#F86C26', tabId });
 }
 
 function resetBadge(tabId) {
-  chrome.action.setIcon({
-    path: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' },
-    tabId,
-  });
+  chrome.action.setBadgeText({ text: '', tabId });
 }
 
-// Messages from content.js (via bridge) and popup
+// Messages from content.js and popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = sender.tab?.id;
 
-  // Messages from content script (via bridge)
+  // Messages from content script
   if (msg.source === 'yaku-content') {
     if (!tabId) return;
     const state = getState(tabId);
@@ -40,10 +35,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     } else if (msg.type === 'yaku-status') {
       state.status = msg.status;
       if (msg.status === 'translating') updateBadge(tabId, 0);
-    } else if (msg.type === 'yaku-download') {
-      state.status = 'downloading';
-      state.downloadProgress = msg.progress;
-      updateBadge(tabId, msg.progress * 0.5);  // download = first half of progress
     } else if (msg.type === 'yaku-progress') {
       state.progress = msg.progress;
       updateBadge(tabId, msg.progress);
@@ -83,7 +74,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           state.from = msg.from;
           state.to = msg.to;
         } else {
-          // Immediately update state so polls don't see stale status
           state.status = 'idle';
           state.progress = 0;
           resetBadge(tabs[0].id);
