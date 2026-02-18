@@ -130,6 +130,7 @@ const statusEl = document.getElementById('status');
 const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
 const favsEl = document.getElementById('favs');
+const cancelBtn = document.getElementById('cancelBtn');
 const settingsToggle = document.getElementById('settingsToggle');
 const settingsPanel = document.getElementById('settingsPanel');
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -184,6 +185,7 @@ function renderState(state) {
 
   if (s === 'idle' || !s) {
     showControls(true);
+    cancelBtn.hidden = true;
     btn.textContent = 'Translate';
     btn.className = '';
     btn.disabled = false;
@@ -192,15 +194,18 @@ function renderState(state) {
     setProgress(0);
   } else if (s === 'detecting') {
     showControls(false);
+    cancelBtn.hidden = false;
     statusEl.textContent = 'Detecting language…';
     setProgress(0);
   } else if (s === 'translating') {
     showControls(false);
+    cancelBtn.hidden = false;
     const p = state.progress || 0;
     statusEl.textContent = `Translating… ${Math.round(p * 100)}%`;
     setProgress(p);
   } else if (s === 'done') {
     showControls(true);
+    cancelBtn.hidden = true;
     const langName = CODE_TO_NAME[state.to] || state.to;
     btn.textContent = 'Translate';
     btn.className = '';
@@ -214,6 +219,7 @@ function renderState(state) {
     setProgress(0);
   } else if (s === 'error') {
     showControls(true);
+    cancelBtn.hidden = true;
     btn.textContent = 'Translate';
     btn.className = '';
     btn.disabled = false;
@@ -294,6 +300,8 @@ function renderFavs(favs) {
   }
 }
 function saveFavs(favs) { chrome.storage.local.set({ favLangs: favs }); renderFavs(favs); }
+
+cancelBtn.onclick = doCancel;
 
 // Settings
 settingsToggle.onclick = () => {

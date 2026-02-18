@@ -101,7 +101,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           state.progress = 0;
           resetBadge(tabs[0].id);
         }
-        chrome.tabs.sendMessage(tabs[0].id, msg);
+        chrome.tabs.sendMessage(tabs[0].id, msg).catch(() => {});
       }
     });
   }
