@@ -20,9 +20,32 @@ function resetBadge(tabId) {
   chrome.action.setBadgeText({ text: '', tabId });
 }
 
+const API_BASE = 'https://translation.googleapis.com/language/translate/v2';
+
 // Messages from content.js and popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = sender.tab?.id;
+
+  // API proxy for content scripts (no cross-origin fetch in MV3 content scripts)
+  if (msg.type === 'api-call') {
+    (async () => {
+      try {
+        const { apiKey } = await chrome.storage.local.get('apiKey');
+        if (!apiKey) { sendResponse({ error: 'API key not set. Click API Key in the popup.' }); return; }
+        const res = await fetch(`${API_BASE}${msg.endpoint}?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(msg.body),
+        });
+        const data = await res.json();
+        if (!res.ok) sendResponse({ error: data.error?.message || `API error: ${res.status}` });
+        else sendResponse({ data });
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true;
+  }
 
   // Messages from content script
   if (msg.source === 'yaku-content') {

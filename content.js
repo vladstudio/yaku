@@ -57,31 +57,39 @@
 
   // --- Translation ---
 
+  const CHUNK_SIZE = 50;
+
   async function translateNodes(textNodes, onProgress) {
     const groups = groupByBlock(textNodes);
     const blocks = [...groups.entries()];
-    let done = 0;
 
-    for (const [, nodes] of blocks) {
+    for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
       if (abortController?.signal.aborted) return;
 
-      const text = nodes.map(n => n.nodeValue).join('');
-      if (!text.trim()) { done++; continue; }
+      const chunk = blocks.slice(i, i + CHUNK_SIZE);
+      const texts = chunk.map(([, nodes]) => nodes.map(n => n.nodeValue).join(''));
+
+      // Skip chunks with no real text
+      const nonEmpty = texts.map((t, j) => [t, j]).filter(([t]) => t.trim());
+      if (!nonEmpty.length) { onProgress?.((i + chunk.length) / blocks.length); continue; }
 
       try {
-        const translated = await translator.translate(text);
+        const translations = await translator.translateBatch(nonEmpty.map(([t]) => t));
 
-        // Store originals and replace
         pauseObserver();
         try {
-          for (const n of nodes) {
-            if (!originals.has(n)) {
-              originals.set(n, n.nodeValue);
-              originalNodes.add(n);
+          let ti = 0;
+          for (const [, j] of nonEmpty) {
+            const [, nodes] = chunk[j];
+            for (const n of nodes) {
+              if (!originals.has(n)) {
+                originals.set(n, n.nodeValue);
+                originalNodes.add(n);
+              }
             }
+            nodes[0].nodeValue = translations[ti++];
+            for (let k = 1; k < nodes.length; k++) nodes[k].nodeValue = '';
           }
-          nodes[0].nodeValue = translated;
-          for (let i = 1; i < nodes.length; i++) nodes[i].nodeValue = '';
         } finally {
           resumeObserver();
         }
@@ -90,8 +98,7 @@
         console.warn('[yaku] translation error:', e);
       }
 
-      done++;
-      onProgress?.(done / blocks.length);
+      onProgress?.(Math.min(1, (i + chunk.length) / blocks.length));
     }
   }
 
@@ -194,8 +201,6 @@
     const signal = abortController.signal;
 
     try {
-      const apiKey = await YakuTranslator.getApiKey();
-
       // Auto-detect if needed
       let sourceLang = msg.from;
       if (sourceLang === 'auto') {
@@ -214,7 +219,7 @@
       if (signal.aborted) { isTranslating = false; return; }
 
       // Create translator
-      translator = YakuTranslator.create(sourceLang, msg.to, apiKey);
+      translator = YakuTranslator.create(sourceLang, msg.to);
 
       // Translate page
       sendStatus({ type: 'yaku-status', status: 'translating' });

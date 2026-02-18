@@ -302,3 +302,7 @@ chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
 });
 
 setInterval(pollState, 500);
+
+for (const el of document.querySelectorAll('input[list]')) {
+  el.addEventListener('focus', () => el.select());
+}
