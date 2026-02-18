@@ -76,6 +76,7 @@ button:disabled { opacity: 0.5; cursor: default; }
   font-weight: 400;
 }
 .settings-toggle:hover { background: none; color: #666; }
+*:focus { outline: 2px solid rgba(248, 108, 38, 0.2); outline-offset: 2px; }
 .api-key-row {
   display: flex;
   gap: 6px;
@@ -129,7 +130,7 @@ button:disabled { opacity: 0.5; cursor: default; }
         <button id="apiKeySave">Save</button>
       </div>
       <div style="font-size:10px;color:#999;margin-top:4px">
-        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#999">Get a key</a> (enable Cloud Translation API)
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#999">Get a key</a> &middot; <a href="https://console.developers.google.com/apis/api/translate.googleapis.com/overview" target="_blank" style="color:#999">Enable Cloud Translation API</a>
       </div>
     </div>
   </div>
