@@ -37,38 +37,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'yaku-detected') {
       state.detectedLang = msg.language;
       state.confidence = msg.confidence;
-    }
-
-    if (msg.type === 'yaku-status') {
+    } else if (msg.type === 'yaku-status') {
       state.status = msg.status;
       if (msg.status === 'translating') updateBadge(tabId, 0);
-    }
-
-    if (msg.type === 'yaku-download') {
+    } else if (msg.type === 'yaku-download') {
       state.status = 'downloading';
       state.downloadProgress = msg.progress;
-    }
-
-    if (msg.type === 'yaku-progress') {
+      updateBadge(tabId, msg.progress * 0.5);  // download = first half of progress
+    } else if (msg.type === 'yaku-progress') {
       state.progress = msg.progress;
       updateBadge(tabId, msg.progress);
-    }
-
-    if (msg.type === 'yaku-done') {
+    } else if (msg.type === 'yaku-done') {
       state.status = 'done';
       state.from = msg.from;
       state.to = msg.to;
       state.progress = 1;
       resetBadge(tabId);
-    }
-
-    if (msg.type === 'yaku-error') {
+    } else if (msg.type === 'yaku-error') {
       state.status = 'error';
       state.error = msg.error;
       resetBadge(tabId);
-    }
-
-    if (msg.type === 'yaku-cancelled' || msg.type === 'yaku-restored') {
+    } else if (msg.type === 'yaku-cancelled' || msg.type === 'yaku-restored') {
       state.status = 'idle';
       state.progress = 0;
       resetBadge(tabId);
@@ -93,6 +82,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           state.status = 'detecting';
           state.from = msg.from;
           state.to = msg.to;
+        } else {
+          // Immediately update state so polls don't see stale status
+          state.status = 'idle';
+          state.progress = 0;
+          resetBadge(tabs[0].id);
         }
         chrome.tabs.sendMessage(tabs[0].id, msg);
       }

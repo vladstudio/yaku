@@ -4,39 +4,48 @@
 const YakuTranslator = (() => {
   // --- Language Detection (3-layer) ---
 
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+    ]);
+  }
+
   async function detectLanguage(sampleText) {
     // Layer 1: <html lang="...">
     const htmlLang = document.documentElement.lang?.split('-')[0];
-    if (htmlLang && htmlLang !== 'en') return { language: htmlLang, confidence: 0.8 };
+    if (htmlLang) return { language: htmlLang, confidence: 0.8 };
 
     // Layer 2: <meta http-equiv="content-language">
     const metaLang = document.querySelector('meta[http-equiv="content-language"]')?.content?.split('-')[0];
     if (metaLang) return { language: metaLang, confidence: 0.7 };
 
-    // Layer 3: LanguageDetector API
+    // Layer 3: LanguageDetector API (with timeout — create() can hang if model needs download)
     if ('LanguageDetector' in self) {
-      const status = await LanguageDetector.availability();
-      if (status !== 'unavailable') {
-        const detector = await LanguageDetector.create();
-        try {
-          const results = await detector.detect(sampleText || document.body.innerText.slice(0, 500));
-          const top = results.find(r => r.detectedLanguage !== 'und');
-          if (top) return { language: top.detectedLanguage, confidence: top.confidence };
-        } finally {
-          detector.destroy();
+      try {
+        const status = await withTimeout(LanguageDetector.availability(), 3000);
+        if (status === 'available') {
+          const detector = await withTimeout(LanguageDetector.create(), 5000);
+          try {
+            const text = sampleText || document.body.innerText.slice(0, 500);
+            const results = await withTimeout(detector.detect(text), 5000);
+            const top = results.find(r => r.detectedLanguage !== 'und');
+            if (top) return { language: top.detectedLanguage, confidence: top.confidence };
+          } finally {
+            detector.destroy();
+          }
         }
+      } catch {
+        // Timeout or API error — fall through
       }
     }
-
-    // Layer 1 fallback: html lang even if "en"
-    if (htmlLang) return { language: htmlLang, confidence: 0.5 };
 
     return { language: 'und', confidence: 0 };
   }
 
   // --- Translation Engine ---
 
-  async function create(sourceLang, targetLang, onProgress) {
+  async function create(sourceLang, targetLang, { onProgress, signal } = {}) {
     if (!('Translator' in self)) {
       throw new Error('Chrome Translator API not available. Requires Chrome 138+.');
     }
@@ -50,9 +59,11 @@ const YakuTranslator = (() => {
       throw new Error(`Translation ${sourceLang} → ${targetLang} is not supported.`);
     }
 
+    const needsDownload = availability !== 'available';
     const options = { sourceLanguage: sourceLang, targetLanguage: targetLang };
+    if (signal) options.signal = signal;
 
-    if (availability !== 'available') {
+    if (needsDownload) {
       options.monitor = (m) => {
         m.addEventListener('downloadprogress', (e) => {
           onProgress?.({ type: 'download', progress: e.loaded });
@@ -65,6 +76,7 @@ const YakuTranslator = (() => {
     return {
       translate: (text) => instance.translate(text),
       destroy: () => instance.destroy(),
+      needsDownload,
     };
   }
 

@@ -4,7 +4,7 @@
 (() => {
   // SW/popup → content.js
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    window.postMessage({ ...msg, source: 'yaku-bridge' }, '*');
+    window.postMessage({ ...msg, source: 'yaku-bridge' }, location.origin);
     sendResponse({ ok: true });
   });
 

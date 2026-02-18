@@ -29,7 +29,7 @@ button {
   font-weight: 500;
   cursor: pointer;
   color: #fff;
-  background: #EE6F30;
+  background: #F86C26;
 }
 button:hover { background: #d9612a; }
 button.cancel { background: #888; }
@@ -42,7 +42,7 @@ button:disabled { opacity: 0.5; cursor: default; }
   margin-top: 8px;
 }
 .status a {
-  color: #EE6F30;
+  color: #F86C26;
   cursor: pointer;
   text-decoration: underline;
 }
@@ -56,26 +56,36 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .progress-bar .fill {
   height: 100%;
-  background: #EE6F30;
+  background: #F86C26;
   width: 0%;
   transition: width 0.3s;
 }
+.download-pct {
+  font-size: 28px;
+  font-weight: 600;
+  color: #F86C26;
+  text-align: center;
+  margin: 8px 0 4px;
+}
 .error { color: #c33; font-size: 12px; text-align: center; margin-top: 6px; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
-  <div class="row">
-    <label>From</label>
-    <select id="from">
-      <option value="auto">Auto-detect</option>
-    </select>
+  <div id="controls">
+    <div class="row">
+      <label>From</label>
+      <select id="from">
+        <option value="auto">Auto-detect</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>To</label>
+      <select id="to"></select>
+    </div>
+    <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+    <button id="btn">Translate</button>
   </div>
-  <div class="row">
-    <label>To</label>
-    <select id="to"></select>
-  </div>
-  <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
-  <button id="btn">Translate</button>
   <div class="status" id="status"></div>
 <script src="popup.js"></script>
 </body>

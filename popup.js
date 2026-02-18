@@ -33,6 +33,7 @@ const LANGUAGES = [
 
 const LANG_NAMES = Object.fromEntries(LANGUAGES);
 
+const controlsEl = document.getElementById('controls');
 const fromEl = document.getElementById('from');
 const toEl = document.getElementById('to');
 const btn = document.getElementById('btn');
@@ -40,7 +41,6 @@ const statusEl = document.getElementById('status');
 const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
 
-// Populate selects
 function populateSelects(detectedLang) {
   fromEl.innerHTML = '';
   toEl.innerHTML = '';
@@ -66,52 +66,71 @@ function setProgress(pct) {
   progressFill.style.width = `${Math.round(pct * 100)}%`;
 }
 
+function showControls(visible) {
+  controlsEl.hidden = !visible;
+}
+
 function renderState(state) {
   const s = state.status;
 
   if (s === 'idle' || !s) {
+    showControls(true);
     btn.textContent = 'Translate';
     btn.className = '';
     btn.disabled = false;
     btn.onclick = doTranslate;
-    statusEl.innerHTML = '';
+    statusEl.textContent = '';
     setProgress(0);
-  } else if (s === 'detecting') {
-    btn.textContent = 'Cancel';
-    btn.className = 'cancel';
-    btn.disabled = false;
-    btn.onclick = doCancel;
-    statusEl.textContent = 'Detecting language…';
+  } else if (s === 'detecting' || s === 'preparing') {
+    showControls(false);
+    statusEl.textContent = s === 'detecting' ? 'Detecting language…' : 'Preparing…';
     setProgress(0);
   } else if (s === 'downloading') {
-    btn.textContent = 'Cancel';
-    btn.className = 'cancel';
-    btn.onclick = doCancel;
+    showControls(false);
     const dp = state.downloadProgress || 0;
-    statusEl.textContent = `Downloading language pack… ${Math.round(dp * 100)}%`;
+    const pct = Math.round(dp * 100);
+    statusEl.textContent = '';
+    const pctEl = document.createElement('div');
+    pctEl.className = 'download-pct';
+    pctEl.textContent = `${pct}%`;
+    const labelEl = document.createElement('div');
+    labelEl.style.cssText = 'text-align:center;font-size:11px;color:#888;margin-bottom:10px';
+    labelEl.textContent = 'Downloading language model…';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'cancel';
+    cancelBtn.onclick = doCancel;
+    statusEl.append(pctEl, labelEl, cancelBtn);
     setProgress(dp);
   } else if (s === 'translating') {
-    btn.textContent = 'Cancel';
-    btn.className = 'cancel';
-    btn.onclick = doCancel;
+    showControls(false);
     const p = state.progress || 0;
     statusEl.textContent = `Translating… ${Math.round(p * 100)}%`;
     setProgress(p);
   } else if (s === 'done') {
+    showControls(true);
     const langName = LANG_NAMES[state.to] || state.to;
     btn.textContent = 'Translate';
     btn.className = '';
     btn.disabled = false;
     btn.onclick = doTranslate;
-    statusEl.innerHTML = `Translated to ${langName}. <a id="restoreLink">Show original</a>`;
+    statusEl.textContent = '';
+    statusEl.append(
+      `Translated to ${langName}. `,
+      Object.assign(document.createElement('a'), { textContent: 'Show original', onclick: doRestore }),
+    );
     setProgress(0);
-    document.getElementById('restoreLink')?.addEventListener('click', doRestore);
   } else if (s === 'error') {
+    showControls(true);
     btn.textContent = 'Translate';
     btn.className = '';
     btn.disabled = false;
     btn.onclick = doTranslate;
-    statusEl.innerHTML = `<span class="error">${state.error || 'Translation failed.'}</span>`;
+    statusEl.textContent = '';
+    const errSpan = document.createElement('span');
+    errSpan.className = 'error';
+    errSpan.textContent = state.error || 'Translation failed.';
+    statusEl.append(errSpan);
     setProgress(0);
   }
 }
@@ -135,31 +154,21 @@ function doRestore() {
   renderState({ status: 'idle' });
 }
 
-// Poll state from service worker to stay in sync
+// Poll state from service worker
 function pollState() {
   chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
     if (state) renderState(state);
   });
 }
 
-// Listen for live updates from service worker
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.source === 'yaku-content') {
-    // Re-poll to get consistent state
-    pollState();
-  }
-});
-
 // Init
-populateSelects(null);
 chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
+  populateSelects(state?.detectedLang ?? null);
   if (state) {
-    populateSelects(state.detectedLang);
     if (state.from && state.from !== 'auto') fromEl.value = state.from;
     if (state.to) toEl.value = state.to;
     renderState(state);
   }
 });
 
-// Keep polling while popup is open (for progress updates)
 setInterval(pollState, 500);

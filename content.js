@@ -14,14 +14,13 @@
     'THEAD', 'TR', 'UL',
   ]);
 
-  let originals = new Map();     // node → original textContent
+  let originals = new WeakMap();  // node → original textContent
+  let originalNodes = new Set();  // track nodes for restore iteration
   let translator = null;
   let observer = null;
   let abortController = null;
   let isTranslating = false;
-  let currentTargetLang = null;
-  let currentSourceLang = null;
-  let pendingNodes = [];
+  let mutationQueue = null;       // serializes MutationObserver translations
 
   // --- DOM traversal ---
 
@@ -74,18 +73,18 @@
 
         // Store originals and replace
         pauseObserver();
-        if (nodes.length === 1) {
-          if (!originals.has(nodes[0])) originals.set(nodes[0], nodes[0].nodeValue);
-          nodes[0].nodeValue = translated;
-        } else {
-          // Put all translated text in first node, empty the rest
+        try {
           for (const n of nodes) {
-            if (!originals.has(n)) originals.set(n, n.nodeValue);
+            if (!originals.has(n)) {
+              originals.set(n, n.nodeValue);
+              originalNodes.add(n);
+            }
           }
           nodes[0].nodeValue = translated;
           for (let i = 1; i < nodes.length; i++) nodes[i].nodeValue = '';
+        } finally {
+          resumeObserver();
         }
-        resumeObserver();
       } catch (e) {
         if (e.name === 'AbortError') return;
         console.warn('[yaku] translation error:', e);
@@ -107,7 +106,7 @@
     if (observer) observer.disconnect();
 
     observer = new MutationObserver((mutations) => {
-      if (observerPaused || !isTranslating && !translator) return;
+      if (observerPaused || !translator) return;
 
       const newTextNodes = [];
       for (const mutation of mutations) {
@@ -125,9 +124,11 @@
       }
 
       if (newTextNodes.length > 0 && translator) {
-        translateNodes(newTextNodes, (p) => {
+        const work = () => translateNodes(newTextNodes, (p) => {
           postMessage({ type: 'yaku-progress', progress: p, incremental: true });
         });
+        // Serialize: queue behind any in-flight mutation translation
+        mutationQueue = (mutationQueue || Promise.resolve()).then(work, work);
       }
     });
 
@@ -142,20 +143,25 @@
 
   function restoreOriginals() {
     pauseObserver();
-    for (const [node, original] of originals) {
-      try { node.nodeValue = original; } catch {}
+    for (const node of originalNodes) {
+      const original = originals.get(node);
+      if (original != null) {
+        try { node.nodeValue = original; } catch {}
+      }
     }
-    originals.clear();
+    originals = new WeakMap();
+    originalNodes.clear();
     resumeObserver();
     stopObserver();
     if (translator) { translator.destroy(); translator = null; }
     isTranslating = false;
+    mutationQueue = null;
   }
 
   // --- Message handling (from bridge.js via postMessage) ---
 
   function postMessage(data) {
-    window.postMessage({ ...data, source: 'yaku-content' }, '*');
+    window.postMessage({ ...data, source: 'yaku-content' }, location.origin);
   }
 
   window.addEventListener('message', async (event) => {
@@ -170,21 +176,19 @@
       } catch (e) {
         postMessage({ type: 'yaku-detected', language: 'und', confidence: 0 });
       }
-    }
-
-    if (msg.type === 'translate') {
+    } else if (msg.type === 'translate') {
       if (isTranslating) return;
       isTranslating = true;
       abortController = new AbortController();
-      currentSourceLang = msg.from;
-      currentTargetLang = msg.to;
 
+      const signal = abortController.signal;
       try {
         // Auto-detect if needed
         let sourceLang = msg.from;
         if (sourceLang === 'auto') {
           postMessage({ type: 'yaku-status', status: 'detecting' });
           const detected = await YakuTranslator.detectLanguage();
+          if (signal.aborted) { isTranslating = false; return; }
           sourceLang = detected.language;
           if (sourceLang === 'und') {
             postMessage({ type: 'yaku-error', error: 'Could not detect page language.' });
@@ -194,17 +198,18 @@
           postMessage({ type: 'yaku-detected', language: sourceLang, confidence: detected.confidence });
         }
 
-        currentSourceLang = sourceLang;
+        if (signal.aborted) { isTranslating = false; return; }
 
-        // Create translator
-        postMessage({ type: 'yaku-status', status: 'downloading' });
-        translator = await YakuTranslator.create(sourceLang, msg.to, (ev) => {
-          if (ev.type === 'download') {
-            postMessage({ type: 'yaku-download', progress: ev.progress });
-          }
+        // Create translator (may trigger model download)
+        postMessage({ type: 'yaku-status', status: 'preparing' });
+        translator = await YakuTranslator.create(sourceLang, msg.to, {
+          signal,
+          onProgress(ev) {
+            if (ev.type === 'download') postMessage({ type: 'yaku-download', progress: ev.progress });
+          },
         });
 
-        if (abortController.signal.aborted) { translator.destroy(); translator = null; isTranslating = false; return; }
+        if (signal.aborted) { translator.destroy(); translator = null; isTranslating = false; return; }
 
         // Translate page
         postMessage({ type: 'yaku-status', status: 'translating' });
@@ -213,24 +218,22 @@
           postMessage({ type: 'yaku-progress', progress });
         });
 
-        if (!abortController.signal.aborted) {
+        if (!signal.aborted) {
           startObserver();
           postMessage({ type: 'yaku-done', from: sourceLang, to: msg.to });
         }
       } catch (e) {
-        postMessage({ type: 'yaku-error', error: e.message });
+        if (!signal.aborted) {
+          postMessage({ type: 'yaku-error', error: e.message });
+        }
       }
 
       isTranslating = false;
-    }
-
-    if (msg.type === 'cancel') {
+    } else if (msg.type === 'cancel') {
       if (abortController) abortController.abort();
       restoreOriginals();
       postMessage({ type: 'yaku-cancelled' });
-    }
-
-    if (msg.type === 'restore') {
+    } else if (msg.type === 'restore') {
       restoreOriginals();
       postMessage({ type: 'yaku-restored' });
     }
