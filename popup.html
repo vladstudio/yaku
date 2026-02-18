@@ -95,6 +95,13 @@ button:disabled { opacity: 0.5; cursor: default; }
   font-size: 11px;
 }
 [hidden] { display: none !important; }
+.favs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+.favs span { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid #ddd; cursor: pointer; white-space: nowrap; color: #555; }
+.favs span:hover { border-color: #F86C26; color: #F86C26; }
+.favs span b { display: none; font-weight: normal; margin-left: 2px; font-size: 9px; }
+.favs span:hover b { display: inline; }
+.favs span.active { background: #F86C26; color: #fff; border-color: #F86C26; }
+.favs span.add { border-style: dashed; color: #aaa; }
 </style>
 </head>
 <body>
@@ -109,6 +116,7 @@ button:disabled { opacity: 0.5; cursor: default; }
       <input type="text" id="to" list="toList" placeholder="Language">
       <datalist id="toList"></datalist>
     </div>
+    <div class="favs" id="favs"></div>
     <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
     <button id="btn">Translate</button>
   </div>

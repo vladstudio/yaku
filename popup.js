@@ -129,6 +129,7 @@ const btn = document.getElementById('btn');
 const statusEl = document.getElementById('status');
 const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
+const favsEl = document.getElementById('favs');
 const settingsToggle = document.getElementById('settingsToggle');
 const settingsPanel = document.getElementById('settingsPanel');
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -268,6 +269,32 @@ function pollState() {
   });
 }
 
+// Favorites
+function renderFavs(favs) {
+  favsEl.innerHTML = '';
+  for (const code of favs) {
+    const lang = LANGUAGES.find(l => l[0] === code);
+    if (!lang) continue;
+    const chip = document.createElement('span');
+    chip.append(lang[2]);
+    if (toEl.value === lang[1]) chip.className = 'active';
+    chip.onclick = () => { toEl.value = lang[1]; renderFavs(favs); };
+    const x = Object.assign(document.createElement('b'), { textContent: '✕' });
+    x.onclick = (e) => { e.stopPropagation(); saveFavs(favs.filter(c => c !== code)); };
+    chip.append(x);
+    favsEl.append(chip);
+  }
+  if (favs.length < 4) {
+    const add = Object.assign(document.createElement('span'), { textContent: '+', className: 'add' });
+    add.onclick = () => {
+      const code = resolveLanguage(toEl);
+      if (code && !favs.includes(code)) saveFavs([...favs, code]);
+    };
+    favsEl.append(add);
+  }
+}
+function saveFavs(favs) { chrome.storage.local.set({ favLangs: favs }); renderFavs(favs); }
+
 // Settings
 settingsToggle.onclick = () => {
   settingsPanel.hidden = !settingsPanel.hidden;
@@ -283,11 +310,9 @@ apiKeySave.onclick = () => {
 };
 
 // Init
-chrome.storage.local.get('apiKey', ({ apiKey }) => {
-  if (apiKey) {
-    apiKeyInput.value = apiKey;
-    settingsToggle.textContent = 'API Key ✓';
-  }
+chrome.storage.local.get(['apiKey', 'favLangs'], ({ apiKey, favLangs }) => {
+  if (apiKey) { apiKeyInput.value = apiKey; settingsToggle.textContent = 'API Key ✓'; }
+  renderFavs(favLangs || []);
 });
 
 chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
@@ -303,6 +328,5 @@ chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
 
 setInterval(pollState, 500);
 
-for (const el of document.querySelectorAll('input[list]')) {
-  el.addEventListener('focus', () => el.select());
-}
+for (const el of document.querySelectorAll('input[list]')) el.addEventListener('focus', () => el.select());
+toEl.addEventListener('input', () => chrome.storage.local.get('favLangs', ({ favLangs }) => renderFavs(favLangs || [])));
