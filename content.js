@@ -196,6 +196,23 @@
 
   async function handleTranslate(msg) {
     if (isTranslating) return;
+
+    // Restore originals before re-translating so we always translate from the real source text
+    if (originalNodes.size > 0) {
+      pauseObserver();
+      for (const node of originalNodes) {
+        const original = originals.get(node);
+        if (original != null) {
+          try { node.nodeValue = original; } catch {}
+        }
+      }
+      originals = new WeakMap();
+      originalNodes.clear();
+      resumeObserver();
+      stopObserver();
+      if (translator) { translator.destroy(); translator = null; }
+    }
+
     isTranslating = true;
     abortController = new AbortController();
     const signal = abortController.signal;
