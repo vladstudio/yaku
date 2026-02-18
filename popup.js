@@ -349,10 +349,12 @@ modeToggle.addEventListener('click', (e) => {
 // Check if page has a text selection, enable/disable Selection button
 chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
   if (!tab) return;
-  chrome.tabs.sendMessage(tab.id, { type: 'hasSelection' }, (has) => {
-    if (chrome.runtime.lastError) return;
-    const selBtn = modeToggle.querySelector('[data-mode="selection"]');
-    selBtn.disabled = !has;
+  chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => window.getSelection().toString().trim().length > 0,
+  }, (results) => {
+    if (chrome.runtime.lastError || !results?.[0]) return;
+    modeToggle.querySelector('[data-mode="selection"]').disabled = !results[0].result;
   });
 });
 
