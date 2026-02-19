@@ -3,22 +3,62 @@
 <head>
 <meta charset="utf-8">
 <style>
+:root {
+  --bg: #fff;
+  --text: #1a1a1a;
+  --text-dim: #666;
+  --text-muted: #999;
+  --text-mid: #555;
+  --input-bg: #fff;
+  --input-border: #ccc;
+  --border: #ddd;
+  --border-light: #eee;
+  --accent: #F86C26;
+  --accent-hover: #d9612a;
+  --cancel: #888;
+  --cancel-hover: #666;
+  --error: #c33;
+  --focus: rgba(248, 108, 38, 0.2);
+  --chip-add: #aaa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e;
+    --text: #ddd;
+    --text-dim: #aaa;
+    --text-muted: #777;
+    --text-mid: #aaa;
+    --input-bg: #2a2a2a;
+    --input-border: #444;
+    --border: #444;
+    --border-light: #333;
+    --accent: #d4601f;
+    --accent-hover: #b8521a;
+    --cancel: #555;
+    --cancel-hover: #777;
+    --error: #e55;
+    --focus: rgba(212, 96, 31, 0.3);
+    --chip-add: #666;
+  }
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   width: 260px;
   font: 13px/1.4 -apple-system, system-ui, sans-serif;
   padding: 12px;
-  color: #1a1a1a;
+  color: var(--text);
+  background: var(--bg);
 }
 .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
-label { font-size: 11px; color: #666; min-width: 34px; }
+label { font-size: 11px; color: var(--text-dim); min-width: 34px; }
 input[type="text"] {
   flex: 1;
   padding: 4px 6px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-size: 12px;
-  background: #fff;
+  background: var(--input-bg);
+  color: var(--text);
   min-width: 0;
 }
 button {
@@ -30,26 +70,26 @@ button {
   font-weight: 500;
   cursor: pointer;
   color: #fff;
-  background: #F86C26;
+  background: var(--accent);
 }
-button:hover { background: #d9612a; }
-button.cancel { background: #888; }
-button.cancel:hover { background: #666; }
+button:hover { background: var(--accent-hover); }
+button.cancel { background: var(--cancel); }
+button.cancel:hover { background: var(--cancel-hover); }
 button:disabled { opacity: 0.5; cursor: default; }
 .status {
   text-align: center;
   font-size: 12px;
-  color: #555;
+  color: var(--text-mid);
   margin-top: 8px;
 }
 .status a {
-  color: #F86C26;
+  color: var(--accent);
   cursor: pointer;
   text-decoration: underline;
 }
 .progress-bar {
   height: 3px;
-  background: #eee;
+  background: var(--border-light);
   border-radius: 2px;
   margin-bottom: 10px;
   overflow: hidden;
@@ -57,26 +97,26 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .progress-bar .fill {
   height: 100%;
-  background: #F86C26;
+  background: var(--accent);
   width: 0%;
   transition: width 0.3s;
 }
-.error { color: #c33; font-size: 12px; text-align: center; margin-top: 6px; }
+.error { color: var(--error); font-size: 12px; text-align: center; margin-top: 6px; }
 .settings {
   margin-top: 10px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-light);
   padding-top: 8px;
 }
 .settings-toggle {
   width: auto;
   background: none;
-  color: #999;
+  color: var(--text-muted);
   font-size: 11px;
   padding: 2px 0;
   font-weight: 400;
 }
-.settings-toggle:hover { background: none; color: #666; }
-*:focus { outline: 2px solid rgba(248, 108, 38, 0.2); outline-offset: 2px; }
+.settings-toggle:hover { background: none; color: var(--text-dim); }
+*:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
 .api-key-row {
   display: flex;
   gap: 6px;
@@ -85,10 +125,12 @@ button:disabled { opacity: 0.5; cursor: default; }
 .api-key-row input {
   flex: 1;
   padding: 4px 6px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-size: 11px;
   font-family: monospace;
+  background: var(--input-bg);
+  color: var(--text);
 }
 .api-key-row button {
   width: auto;
@@ -96,17 +138,17 @@ button:disabled { opacity: 0.5; cursor: default; }
   font-size: 11px;
 }
 .mode-toggle { display: flex; gap: 4px; margin-bottom: 10px; }
-.mode-toggle button { flex: 1; padding: 4px; border: 1px solid #ddd; background: none; font-size: 11px; cursor: pointer; color: #666; border-radius: 10px; }
-.mode-toggle button.active { background: #F86C26; color: #fff; border-color: #F86C26; }
+.mode-toggle button { flex: 1; padding: 4px; border: 1px solid var(--border); background: none; font-size: 11px; cursor: pointer; color: var(--text-dim); border-radius: 10px; }
+.mode-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .mode-toggle button:disabled { opacity: 0.35; cursor: default; }
 [hidden] { display: none !important; }
 .favs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
-.favs span { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid #ddd; cursor: pointer; white-space: nowrap; color: #555; }
-.favs span:hover { border-color: #F86C26; color: #F86C26; }
+.favs span { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; white-space: nowrap; color: var(--text-mid); }
+.favs span:hover { border-color: var(--accent); color: var(--accent); }
 .favs span b { display: none; font-weight: normal; margin-left: 2px; font-size: 9px; }
 .favs span:hover b { display: inline; }
-.favs span.active { background: #F86C26; color: #fff; border-color: #F86C26; }
-.favs span.add { border-style: dashed; color: #aaa; }
+.favs span.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.favs span.add { border-style: dashed; color: var(--chip-add); }
 </style>
 </head>
 <body>
@@ -139,8 +181,8 @@ button:disabled { opacity: 0.5; cursor: default; }
         <input type="password" id="apiKeyInput" placeholder="Google Cloud API key">
         <button id="apiKeySave">Save</button>
       </div>
-      <div style="font-size:10px;color:#999;margin-top:4px">
-        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#999">Get a key</a> &middot; <a href="https://console.developers.google.com/apis/api/translate.googleapis.com/overview" target="_blank" style="color:#999">Enable Cloud Translation API</a>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:4px">
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--text-muted)">Get a key</a> &middot; <a href="https://console.developers.google.com/apis/api/translate.googleapis.com/overview" target="_blank" style="color:var(--text-muted)">Enable Cloud Translation API</a>
       </div>
     </div>
   </div>
