@@ -52,10 +52,6 @@ const YakuTranslator = (() => {
         });
         return data.data.translations.map(t => t.translatedText);
       },
-      async translate(text) {
-        const results = await this.translateBatch([text]);
-        return results[0];
-      },
       destroy() {},
     };
   }

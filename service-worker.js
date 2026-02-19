@@ -54,7 +54,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     if (msg.type === 'yaku-detected') {
       state.detectedLang = msg.language;
-      state.confidence = msg.confidence;
     } else if (msg.type === 'yaku-status') {
       state.status = msg.status;
       if (msg.status === 'translating') updateBadge(tabId, 0);

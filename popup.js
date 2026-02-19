@@ -232,6 +232,7 @@ function doRestore() {
 // Poll state from service worker
 function pollState() {
   chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
+    if (chrome.runtime.lastError) return;
     if (state) renderState(state);
   });
 }
