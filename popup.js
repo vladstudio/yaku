@@ -255,6 +255,7 @@ function doTranslate() {
     return;
   }
 
+  chrome.storage.local.set({ lastTargetLang: to });
   const mode = modeToggle.querySelector('.active').dataset.mode;
   chrome.runtime.sendMessage({ type: 'translate', from, to, mode });
   renderState({ status: 'detecting' });
@@ -328,22 +329,24 @@ apiKeySave.onclick = () => {
 };
 
 // Init
-chrome.storage.local.get(['apiKey', 'favLangs'], ({ apiKey, favLangs }) => {
+chrome.storage.local.get(['apiKey', 'favLangs', 'lastTargetLang'], ({ apiKey, favLangs, lastTargetLang }) => {
   if (apiKey) { apiKeyInput.value = apiKey; settingsToggle.textContent = 'API Key ✓'; }
-  renderFavs(favLangs || []);
-});
+  const defaultLang = CODE_TO_NAME[lastTargetLang] || 'English';
 
-chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
-  detectedPageLang = state?.detectedLang ?? null;
-  populateLists(detectedPageLang);
-  if (state) {
-    if (state.from && state.from !== 'auto') fromEl.value = CODE_TO_NAME[state.from] || '';
-    if (state.to) toEl.value = CODE_TO_NAME[state.to] || 'English';
-    renderState(state);
-  } else {
-    toEl.value = 'English';
-  }
-  updateBtn();
+  chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
+    detectedPageLang = state?.detectedLang ?? null;
+    populateLists(detectedPageLang);
+    if (state) {
+      if (state.from && state.from !== 'auto') fromEl.value = CODE_TO_NAME[state.from] || '';
+      if (state.to) toEl.value = CODE_TO_NAME[state.to] || defaultLang;
+      renderState(state);
+    } else {
+      toEl.value = defaultLang;
+    }
+    updateBtn();
+  });
+
+  renderFavs(favLangs || []);
 });
 
 setInterval(pollState, 500);
