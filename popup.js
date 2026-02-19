@@ -127,10 +127,7 @@ const fromList = document.getElementById('fromList');
 const toList = document.getElementById('toList');
 const btn = document.getElementById('btn');
 const statusEl = document.getElementById('status');
-const progressBar = document.getElementById('progressBar');
-const progressFill = document.getElementById('progressFill');
 const favsEl = document.getElementById('favs');
-const cancelBtn = document.getElementById('cancelBtn');
 const modeToggle = document.getElementById('modeToggle');
 const settingsToggle = document.getElementById('settingsToggle');
 const settingsPanel = document.getElementById('settingsPanel');
@@ -172,65 +169,31 @@ function resolveLanguage(input) {
   return null;
 }
 
-function setProgress(pct) {
-  progressBar.style.display = pct > 0 ? 'block' : 'none';
-  progressFill.style.width = `${Math.round(pct * 100)}%`;
-}
-
-function showControls(visible) {
-  controlsEl.hidden = !visible;
-}
-
 function renderState(state) {
   const s = state.status;
+  const isActive = s === 'detecting' || s === 'translating' || s === 'done';
 
-  if (s === 'idle' || !s) {
-    showControls(true);
-    cancelBtn.hidden = true;
+  controlsEl.hidden = isActive;
+  statusEl.textContent = '';
+
+  if (isActive) {
+    const langName = CODE_TO_NAME[state.to] || state.to || toEl.value;
+    btn.textContent = 'Cancel';
+    btn.className = 'cancel';
+    btn.disabled = false;
+    btn.onclick = doRestore;
+    statusEl.textContent = `Translating to ${langName}`;
+  } else {
     btn.textContent = 'Translate';
     btn.className = '';
     btn.disabled = false;
     btn.onclick = doTranslate;
-    statusEl.textContent = '';
-    setProgress(0);
-  } else if (s === 'detecting') {
-    showControls(false);
-    cancelBtn.hidden = false;
-    statusEl.textContent = 'Detecting language…';
-    setProgress(0);
-  } else if (s === 'translating') {
-    showControls(false);
-    cancelBtn.hidden = false;
-    const p = state.progress || 0;
-    statusEl.textContent = `Translating… ${Math.round(p * 100)}%`;
-    setProgress(p);
-  } else if (s === 'done') {
-    showControls(true);
-    cancelBtn.hidden = true;
-    const langName = CODE_TO_NAME[state.to] || state.to;
-    btn.textContent = 'Translate';
-    btn.className = '';
-    btn.disabled = false;
-    btn.onclick = doTranslate;
-    statusEl.textContent = '';
-    statusEl.append(
-      `Translated to ${langName}. `,
-      Object.assign(document.createElement('a'), { textContent: 'Show original', onclick: doRestore }),
-    );
-    setProgress(0);
-  } else if (s === 'error') {
-    showControls(true);
-    cancelBtn.hidden = true;
-    btn.textContent = 'Translate';
-    btn.className = '';
-    btn.disabled = false;
-    btn.onclick = doTranslate;
-    statusEl.textContent = '';
-    const errSpan = document.createElement('span');
-    errSpan.className = 'error';
-    errSpan.textContent = state.error || 'Translation failed.';
-    statusEl.append(errSpan);
-    setProgress(0);
+    if (s === 'error') {
+      const errSpan = document.createElement('span');
+      errSpan.className = 'error';
+      errSpan.textContent = state.error || 'Translation failed.';
+      statusEl.append(errSpan);
+    }
   }
 }
 
@@ -258,16 +221,11 @@ function doTranslate() {
   chrome.storage.local.set({ lastTargetLang: to });
   const mode = modeToggle.querySelector('.active').dataset.mode;
   chrome.runtime.sendMessage({ type: 'translate', from, to, mode });
-  renderState({ status: 'detecting' });
-}
-
-function doCancel() {
-  chrome.runtime.sendMessage({ type: 'cancel' });
-  renderState({ status: 'idle' });
+  renderState({ status: 'detecting', to });
 }
 
 function doRestore() {
-  chrome.runtime.sendMessage({ type: 'restore' });
+  chrome.runtime.sendMessage({ type: 'cancel' });
   renderState({ status: 'idle' });
 }
 
@@ -304,11 +262,10 @@ function renderFavs(favs) {
 }
 function saveFavs(favs) { chrome.storage.local.set({ favLangs: favs }); renderFavs(favs); }
 
-cancelBtn.onclick = doCancel;
-
 // Disable translate button when source and target languages match
 let detectedPageLang = null;
 function updateBtn() {
+  if (controlsEl.hidden) return;
   const from = fromEl.value.trim() ? resolveLanguage(fromEl) : detectedPageLang;
   const to = resolveLanguage(toEl);
   btn.disabled = !!(from && to && from === to);
@@ -338,7 +295,7 @@ chrome.storage.local.get(['apiKey', 'favLangs', 'lastTargetLang'], ({ apiKey, fa
     populateLists(detectedPageLang);
     if (state) {
       if (state.from && state.from !== 'auto') fromEl.value = CODE_TO_NAME[state.from] || '';
-      if (state.to) toEl.value = CODE_TO_NAME[state.to] || defaultLang;
+      toEl.value = CODE_TO_NAME[state.to] || defaultLang;
       renderState(state);
     } else {
       toEl.value = defaultLang;

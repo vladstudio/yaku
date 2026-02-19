@@ -87,20 +87,6 @@ button:disabled { opacity: 0.5; cursor: default; }
   cursor: pointer;
   text-decoration: underline;
 }
-.progress-bar {
-  height: 3px;
-  background: var(--border-light);
-  border-radius: 2px;
-  margin-bottom: 10px;
-  overflow: hidden;
-  display: none;
-}
-.progress-bar .fill {
-  height: 100%;
-  background: var(--accent);
-  width: 0%;
-  transition: width 0.3s;
-}
 .error { color: var(--error); font-size: 12px; text-align: center; margin-top: 6px; }
 .settings {
   margin-top: 10px;
@@ -168,10 +154,8 @@ button:disabled { opacity: 0.5; cursor: default; }
       <button class="active" data-mode="page">Whole page</button>
       <button data-mode="selection" disabled>Selection</button>
     </div>
-    <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
-    <button id="btn">Translate</button>
   </div>
-  <button class="cancel" id="cancelBtn" hidden>Cancel</button>
+  <button id="btn">Translate</button>
   <div class="status" id="status"></div>
   <div class="settings">
     <button class="settings-toggle" id="settingsToggle">API Key</button>
