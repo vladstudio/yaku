@@ -286,7 +286,7 @@ function renderFavs(favs) {
     const chip = document.createElement('span');
     chip.append(lang[2]);
     if (toEl.value === lang[1]) chip.className = 'active';
-    chip.onclick = () => { toEl.value = lang[1]; renderFavs(favs); };
+    chip.onclick = () => { toEl.value = lang[1]; renderFavs(favs); updateBtn(); };
     const x = Object.assign(document.createElement('b'), { textContent: '✕' });
     x.onclick = (e) => { e.stopPropagation(); saveFavs(favs.filter(c => c !== code)); };
     chip.append(x);
@@ -304,6 +304,14 @@ function renderFavs(favs) {
 function saveFavs(favs) { chrome.storage.local.set({ favLangs: favs }); renderFavs(favs); }
 
 cancelBtn.onclick = doCancel;
+
+// Disable translate button when source and target languages match
+let detectedPageLang = null;
+function updateBtn() {
+  const from = fromEl.value.trim() ? resolveLanguage(fromEl) : detectedPageLang;
+  const to = resolveLanguage(toEl);
+  btn.disabled = !!(from && to && from === to);
+}
 
 // Settings
 settingsToggle.onclick = () => {
@@ -326,7 +334,8 @@ chrome.storage.local.get(['apiKey', 'favLangs'], ({ apiKey, favLangs }) => {
 });
 
 chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
-  populateLists(state?.detectedLang ?? null);
+  detectedPageLang = state?.detectedLang ?? null;
+  populateLists(detectedPageLang);
   if (state) {
     if (state.from && state.from !== 'auto') fromEl.value = CODE_TO_NAME[state.from] || '';
     if (state.to) toEl.value = CODE_TO_NAME[state.to] || 'English';
@@ -334,6 +343,7 @@ chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
   } else {
     toEl.value = 'English';
   }
+  updateBtn();
 });
 
 setInterval(pollState, 500);
@@ -359,4 +369,5 @@ chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
 });
 
 for (const el of document.querySelectorAll('input[list]')) el.addEventListener('focus', () => el.select());
-toEl.addEventListener('input', () => chrome.storage.local.get('favLangs', ({ favLangs }) => renderFavs(favLangs || [])));
+fromEl.addEventListener('input', updateBtn);
+toEl.addEventListener('input', () => { updateBtn(); chrome.storage.local.get('favLangs', ({ favLangs }) => renderFavs(favLangs || [])); });
