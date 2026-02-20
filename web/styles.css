@@ -1,0 +1,147 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  background: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+main {
+  max-width: 640px;
+  text-align: center;
+}
+
+.icon { margin-bottom: 1.5rem; }
+
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.tagline {
+  font-size: 1.125rem;
+  color: #666;
+  margin-bottom: 2rem;
+}
+
+.features {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 2.5rem;
+}
+
+.features li {
+  padding: 0.4rem 0 0.4rem 1.5rem;
+  position: relative;
+  color: #333;
+}
+
+.features li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.75rem;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #F86C26;
+}
+
+.cta {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.cta a {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: opacity 0.15s;
+}
+
+.cta a:hover { opacity: 0.85; }
+
+.cta-primary {
+  background: #F86C26;
+  color: #fff;
+}
+
+.cta-secondary {
+  background: #f0f0f0;
+  color: #1a1a1a;
+}
+
+footer {
+  margin-top: 3rem;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+footer a {
+  color: #F86C26;
+  text-decoration: none;
+}
+
+.card {
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 2rem auto 0;
+  position: relative;
+}
+
+.card img {
+  display: block;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+
+.card img.active {
+  position: relative;
+  opacity: 1;
+}
+
+/* Privacy policy page */
+.prose {
+  text-align: left;
+  line-height: 1.7;
+}
+
+.prose h2 {
+  font-size: 1.25rem;
+  margin: 2rem 0 0.75rem;
+}
+
+.prose p {
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.prose ul {
+  margin: 0 0 1rem 1.5rem;
+  color: #333;
+}
+
+.prose ul li {
+  padding: 0.2rem 0;
+}
+
+.prose a {
+  color: #F86C26;
+  text-decoration: none;
+}

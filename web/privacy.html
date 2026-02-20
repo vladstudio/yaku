@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Yaku</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="prose">
+    <p><a href="/">&larr; Back to Yaku</a></p>
+
+    <h1>Privacy Policy</h1>
+    <p>Last updated: February 20, 2026</p>
+
+    <h2>Overview</h2>
+    <p>Yaku is a Chrome extension that translates web pages using the Google Cloud Translation API. It is designed to be privacy-friendly: it collects no personal data, has no analytics, and sends no information to the developer.</p>
+
+    <h2>Data You Provide</h2>
+    <p><strong>Google API Key.</strong> You provide your own Google Cloud Translation API key to use the extension. This key is stored locally in your browser using Chrome's storage API and is never sent anywhere except to Google's translation endpoint.</p>
+
+    <h2>Data Sent to Third Parties</h2>
+    <p>When you translate a page, the visible text content of that page is sent to the <strong>Google Cloud Translation API</strong> (<code>translation.googleapis.com</code>) along with your API key. This is the only network request the extension makes. Google's use of this data is governed by <a href="https://policies.google.com/privacy" rel="noopener">Google's Privacy Policy</a>.</p>
+
+    <h2>Data Stored Locally</h2>
+    <p>The extension stores the following in your browser's local storage (via <code>chrome.storage.local</code>):</p>
+    <ul>
+      <li>Your Google API key</li>
+      <li>Your preferred target language</li>
+      <li>Your favorite languages list</li>
+    </ul>
+    <p>This data never leaves your browser and is removed when you uninstall the extension.</p>
+
+    <h2>Data Not Collected</h2>
+    <p>Yaku does <strong>not</strong> collect, store, or transmit:</p>
+    <ul>
+      <li>Personal information (name, email, etc.)</li>
+      <li>Browsing history or URLs</li>
+      <li>Analytics or usage data</li>
+      <li>Cookies or tracking identifiers</li>
+    </ul>
+
+    <h2>Permissions</h2>
+    <p>The extension requests these Chrome permissions:</p>
+    <ul>
+      <li><strong>activeTab</strong> — to access the current page's content for translation</li>
+      <li><strong>scripting</strong> — to inject the translation script into the page</li>
+      <li><strong>storage</strong> — to save your API key and language preferences locally</li>
+      <li><strong>host permission for translation.googleapis.com</strong> — to call the Google Cloud Translation API</li>
+    </ul>
+
+    <h2>Changes to This Policy</h2>
+    <p>If this policy changes, the updated version will be posted on this page with a new date.</p>
+
+    <h2>Contact</h2>
+    <p>Questions? Open an issue on <a href="https://github.com/vladstudio/yaku" rel="noopener">GitHub</a>.</p>
+  </main>
+
+  <footer>
+    Made by <a href="https://vlad.studio">vlad.studio</a>
+  </footer>
+</body>
+</html>

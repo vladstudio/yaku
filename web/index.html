@@ -4,141 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Yaku — Page Translator</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #1a1a1a;
-      background: #fff;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
-
-    main {
-      max-width: 640px;
-      text-align: center;
-    }
-
-    .icon { margin-bottom: 1.5rem; }
-    .icon svg { width: 64px; height: 64px; }
-
-    h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-    }
-
-    .tagline {
-      font-size: 1.125rem;
-      color: #666;
-      margin-bottom: 2rem;
-    }
-
-    .features {
-      list-style: none;
-      text-align: left;
-      margin-bottom: 2.5rem;
-    }
-
-    .features li {
-      padding: 0.4rem 0;
-      padding-left: 1.5rem;
-      position: relative;
-      color: #333;
-    }
-
-    .features li::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      top: 0.75rem;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #F86C26;
-    }
-
-    .cta {
-      display: flex;
-      gap: 0.75rem;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .cta a {
-      display: inline-block;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 0.95rem;
-      transition: opacity 0.15s;
-    }
-
-    .cta a:hover { opacity: 0.85; }
-
-    .cta-primary {
-      background: #F86C26;
-      color: #fff;
-    }
-
-    .cta-secondary {
-      background: #f0f0f0;
-      color: #1a1a1a;
-    }
-
-    footer {
-      margin-top: 3rem;
-      font-size: 0.8rem;
-      color: #aaa;
-    }
-
-    footer a {
-      color: #F86C26;
-      text-decoration: none;
-    }
-
-    .card {
-      border: 1px solid #e0e0e0;
-      border-radius: 12px;
-      overflow: hidden;
-      margin: 2rem auto 0;
-      position: relative;
-    }
-
-    .card img {
-      display: block;
-      width: 100%;
-      position: absolute;
-      top: 0;
-      left: 0;
-      opacity: 0;
-      transition: opacity 0.6s;
-    }
-
-    .card img.active {
-      position: relative;
-      opacity: 1;
-    }
-  </style>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main>
-    <div class="icon">
-      <svg width="64" height="64" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M23 13.625C23.5207 13.625 23.9965 13.9192 24.2295 14.3848L31.2295 28.3848C31.569 29.0639 31.2942 29.8898 30.6152 30.2295C29.9361 30.569 29.1102 30.2942 28.7705 29.6152L23 18.0742L17.2295 29.6152C16.8898 30.2942 16.0639 30.569 15.3848 30.2295C14.7058 29.8898 14.431 29.0639 14.7705 28.3848L21.7705 14.3848L21.8682 14.2188C22.1224 13.8502 22.5442 13.625 23 13.625Z" fill="#F86C26"/>
-        <path d="M28 23.625C28.7594 23.625 29.375 24.2406 29.375 25C29.375 25.7594 28.7594 26.375 28 26.375H18C17.2406 26.375 16.625 25.7594 16.625 25C16.625 24.2406 17.2406 23.625 18 23.625H28Z" fill="#F86C26"/>
-        <path d="M8.625 5V2C8.625 1.24061 9.24061 0.625 10 0.625C10.7594 0.625 11.375 1.24061 11.375 2V5C11.375 5.75939 10.7594 6.375 10 6.375C9.24061 6.375 8.625 5.75939 8.625 5Z" fill="#F86C26"/>
-        <path d="M18 3.625C18.7594 3.625 19.375 4.24061 19.375 5C19.375 5.75939 18.7594 6.375 18 6.375H2C1.24061 6.375 0.625 5.75939 0.625 5C0.625 4.24061 1.24061 3.625 2 3.625H18Z" fill="#F86C26"/>
-        <path d="M12.625 5C12.625 4.24061 13.2406 3.625 14 3.625C14.7594 3.625 15.375 4.24061 15.375 5C15.375 8.54727 13.9663 11.9497 11.458 14.458C8.94971 16.9663 5.54727 18.375 2 18.375C1.24061 18.375 0.625 17.7594 0.625 17C0.625 16.2406 1.24061 15.625 2 15.625C4.81792 15.625 7.52012 14.5053 9.5127 12.5127C11.5053 10.5201 12.625 7.81792 12.625 5Z" fill="#F86C26"/>
-        <path d="M6.22574 7.7041C6.94167 7.45107 7.72654 7.82608 7.97965 8.54199C8.71219 10.6138 10.07 12.4072 11.8644 13.6758C13.6588 14.9443 15.8027 15.6255 18.0002 15.625C18.7593 15.6251 19.375 16.2408 19.3752 17C19.3752 17.7593 18.7595 18.3748 18.0002 18.375C15.2339 18.3756 12.5353 17.5187 10.2765 15.9219C8.01763 14.325 6.30997 12.0662 5.38785 9.45801C5.13482 8.74209 5.50983 7.95722 6.22574 7.7041Z" fill="#F86C26"/>
-      </svg>
-    </div>
+    <img class="icon" src="favicon.svg" width="64" height="64" alt="Yaku icon">
 
     <h1>Yaku</h1>
     <p class="tagline">Translate web pages with your own Google API key</p>
@@ -151,12 +25,12 @@
     </ul>
 
     <div class="cta">
-      <a class="cta-primary" href="https://chromewebstore.google.com/detail/yaku-page-translator/TODO">Chrome Web Store</a>
-      <a class="cta-secondary" href="https://github.com/vladstudio/yaku">GitHub</a>
+      <a class="cta-primary" href="https://chromewebstore.google.com/detail/yaku-page-translator/gkiiabcndlmbfaccphaolejmgjnokoii" rel="noopener">Chrome Web Store</a>
+      <a class="cta-secondary" href="https://github.com/vladstudio/yaku" rel="noopener">GitHub</a>
     </div>
     <div class="card">
-      <img src="1.webp" class="active" alt="Yaku screenshot">
-      <img src="2.webp" alt="Yaku screenshot">
+      <img src="1.webp" class="active" alt="Yaku screenshot 1 of 2">
+      <img src="2.webp" alt="Yaku screenshot 2 of 2">
     </div>
   </main>
 
@@ -171,7 +45,7 @@
   </script>
 
   <footer>
-    Made by <a href="https://vlad.studio">vlad.studio</a>
+    Made by <a href="https://vlad.studio">vlad.studio</a> · <a href="privacy.html">Privacy Policy</a>
   </footer>
 </body>
 </html>
