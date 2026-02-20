@@ -325,7 +325,9 @@ chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
     func: () => window.getSelection().toString().trim().length > 0,
   }, (results) => {
     if (chrome.runtime.lastError || !results?.[0]) return;
-    modeToggle.querySelector('[data-mode="selection"]').disabled = !results[0].result;
+    const selBtn = modeToggle.querySelector('[data-mode="selection"]');
+    selBtn.disabled = !results[0].result;
+    if (results[0].result) { modeToggle.querySelector('.active').classList.remove('active'); selBtn.classList.add('active'); }
   });
 });
 
