@@ -174,7 +174,11 @@
     chrome.runtime.sendMessage({ ...data, source: 'yaku-content' });
   }
 
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg.type === 'hasSelection') {
+      sendResponse(window.getSelection().toString().trim().length > 0);
+      return;
+    }
     if (msg.type === 'detect') {
       handleDetect();
     } else if (msg.type === 'translate') {
