@@ -173,7 +173,7 @@ function renderState(state) {
   const s = state.status;
   const isActive = s === 'detecting' || s === 'translating' || s === 'done';
 
-  controlsEl.hidden = isActive;
+  controlsEl.hidden = isActive || !hasApiKey;
   statusEl.textContent = '';
 
   if (isActive) {
@@ -273,22 +273,39 @@ function updateBtn() {
 }
 
 // Settings
+let hasApiKey = false;
+
 settingsToggle.onclick = () => {
-  settingsPanel.hidden = !settingsPanel.hidden;
+  if (hasApiKey) settingsPanel.hidden = !settingsPanel.hidden;
 };
 
 apiKeySave.onclick = () => {
   const key = apiKeyInput.value.trim();
   if (key) {
     chrome.storage.local.set({ apiKey: key });
-    settingsPanel.hidden = true;
-    settingsToggle.textContent = 'API Key ✓';
+    setApiKeyState(true);
   }
 };
 
+function setApiKeyState(has) {
+  hasApiKey = has;
+  if (has) {
+    controlsEl.hidden = false;
+    btn.hidden = false;
+    settingsPanel.hidden = true;
+    settingsToggle.textContent = 'API Key \u2713';
+  } else {
+    controlsEl.hidden = true;
+    btn.hidden = true;
+    settingsPanel.hidden = false;
+    settingsToggle.textContent = 'API Key';
+  }
+}
+
 // Init
 chrome.storage.local.get(['apiKey', 'favLangs', 'lastTargetLang'], ({ apiKey, favLangs, lastTargetLang }) => {
-  if (apiKey) { apiKeyInput.value = apiKey; settingsToggle.textContent = 'API Key ✓'; }
+  if (apiKey) apiKeyInput.value = apiKey;
+  setApiKeyState(!!apiKey);
   const defaultLang = CODE_TO_NAME[lastTargetLang] || 'English';
 
   chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
