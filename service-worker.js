@@ -13,7 +13,7 @@ function getState(tabId) {
 function updateBadge(tabId, progress) {
   const pct = Math.round(progress * 100);
   chrome.action.setBadgeText({ text: `${pct}%`, tabId });
-  chrome.action.setBadgeBackgroundColor({ color: '#F86C26', tabId });
+  chrome.action.setBadgeBackgroundColor({ color: '#E55E1A', tabId });
 }
 
 function resetBadge(tabId) {

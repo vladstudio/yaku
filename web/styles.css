@@ -51,7 +51,7 @@ h1 {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #F86C26;
+  background: #E55E1A;
 }
 
 .cta {
@@ -73,7 +73,7 @@ h1 {
 .cta a:hover { opacity: 0.85; }
 
 .cta-primary {
-  background: #F86C26;
+  background: #E55E1A;
   color: #fff;
 }
 
@@ -89,7 +89,7 @@ footer {
 }
 
 footer a {
-  color: #F86C26;
+  color: #E55E1A;
   text-decoration: none;
 }
 
@@ -142,6 +142,6 @@ footer a {
 }
 
 .prose a {
-  color: #F86C26;
+  color: #E55E1A;
   text-decoration: none;
 }
