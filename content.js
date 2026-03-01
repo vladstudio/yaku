@@ -248,7 +248,10 @@
           const container = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
             ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement;
           for (const n of getTextNodes(container || document.body)) {
-            if (range.intersectsNode(n)) textNodes.push(n);
+            try {
+              if (range.comparePoint(n, 0) <= 0 && range.comparePoint(n, n.length) >= 0)
+                textNodes.push(n);
+            } catch { /* node outside range's root */ }
           }
         }
       } else {
