@@ -3,6 +3,23 @@
 
 const YakuTranslator = (() => {
 
+  const CACHE_LIMIT = 1500;
+  const translationCache = new Map(); // key -> translatedText (LRU: oldest first)
+
+  function cacheKey(sourceLang, targetLang, text) {
+    return `${sourceLang}\u0000${targetLang}\u0000${text}`;
+  }
+
+  function touchCache(key, value) {
+    if (translationCache.has(key)) translationCache.delete(key);
+    translationCache.set(key, value);
+
+    if (translationCache.size > CACHE_LIMIT) {
+      const oldestKey = translationCache.keys().next().value;
+      translationCache.delete(oldestKey);
+    }
+  }
+
   function callApi(endpoint, body) {
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({ type: 'api-call', endpoint, body }, (res) => {
@@ -44,13 +61,54 @@ const YakuTranslator = (() => {
   function create(sourceLang, targetLang) {
     return {
       async translateBatch(texts) {
-        const data = await callApi('', {
-          q: texts,
-          source: sourceLang,
-          target: targetLang,
-          format: 'text',
-        });
-        return data.data.translations.map(t => t.translatedText);
+        if (!texts.length) return [];
+
+        const results = new Array(texts.length);
+        const pendingByText = new Map();
+
+        for (let i = 0; i < texts.length; i++) {
+          const text = texts[i];
+          const key = cacheKey(sourceLang, targetLang, text);
+          const cached = translationCache.get(key);
+
+          if (cached != null) {
+            touchCache(key, cached);
+            results[i] = cached;
+            continue;
+          }
+
+          let indexes = pendingByText.get(text);
+          if (!indexes) {
+            indexes = [];
+            pendingByText.set(text, indexes);
+          }
+          indexes.push(i);
+        }
+
+        if (pendingByText.size > 0) {
+          const uniqueTexts = [...pendingByText.keys()];
+          const data = await callApi('', {
+            q: uniqueTexts,
+            source: sourceLang,
+            target: targetLang,
+            format: 'text',
+          });
+
+          const translated = data.data.translations.map((t) => t.translatedText);
+
+          for (let i = 0; i < uniqueTexts.length; i++) {
+            const srcText = uniqueTexts[i];
+            const dstText = translated[i];
+            const key = cacheKey(sourceLang, targetLang, srcText);
+            touchCache(key, dstText);
+
+            for (const index of pendingByText.get(srcText)) {
+              results[index] = dstText;
+            }
+          }
+        }
+
+        return results;
       },
       destroy() {},
     };

@@ -1,5 +1,5 @@
 // content.js — ISOLATED world script
-// Handles DOM traversal, translation, and MutationObserver
+// Handles DOM traversal, translation, and incremental updates
 
 (() => {
   const SKIP_TAGS = new Set([
@@ -14,100 +14,405 @@
     'THEAD', 'TR', 'UL',
   ]);
 
-  let originals = new WeakMap();  // node → original textContent
+  const VIEWPORT_MARGIN_PX = 200;
+  const MUTATION_DEBOUNCE_MS = 120;
+  const BATCH_MAX_CHARS = 4000;
+  const BATCH_MAX_BLOCKS = 40;
+  const BATCH_CONCURRENCY = 3;
+
+  let originals = new WeakMap();  // node -> original textContent
   let originalNodes = new Set();  // track nodes for restore iteration
   let translator = null;
   let observer = null;
+  let visibilityObserver = null;
   let abortController = null;
+
   let isTranslating = false;
-  let mutationQueue = null;       // serializes MutationObserver translations
+  let observerPaused = false;
+  let hasDetectedLanguage = false;
+  let detectInFlight = false;
 
-  // --- DOM traversal ---
+  let translationQueue = Promise.resolve();
+  let pendingVisibilityBlocks = new Map(); // element -> { element, nodeSet }
+  let pendingMutationRoots = new Set();
+  let mutationTimer = null;
 
-  function getTextNodes(root) {
-    const nodes = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-        let el = node.parentElement;
-        if (!el) return NodeFilter.FILTER_REJECT;
-        if (SKIP_TAGS.has(el.tagName)) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-    while (walker.nextNode()) nodes.push(walker.currentNode);
-    return nodes;
+  function isBlockElement(el) {
+    return !!el && el.nodeType === Node.ELEMENT_NODE && BLOCK_ELEMENTS.has(el.tagName);
   }
 
-  function findBlockParent(node) {
-    let el = node.parentElement;
-    while (el && !BLOCK_ELEMENTS.has(el.tagName)) el = el.parentElement;
-    return el || document.body;
+  function shouldSkipElement(el) {
+    return !el || SKIP_TAGS.has(el.tagName);
   }
 
-  function groupByBlock(textNodes) {
-    const groups = new Map();
-    for (const node of textNodes) {
-      const block = findBlockParent(node);
-      if (!groups.has(block)) groups.set(block, []);
-      groups.get(block).push(node);
+  function isHiddenByAttributes(el) {
+    return !!(el.hidden || el.hasAttribute('inert') || el.getAttribute('aria-hidden') === 'true');
+  }
+
+  function hasHiddenStyle(el) {
+    const style = getComputedStyle(el);
+    return (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.visibility === 'collapse' ||
+      style.contentVisibility === 'hidden'
+    );
+  }
+
+  function isHiddenForTraversal(el, cache) {
+    if (!el) return true;
+    if (cache?.has(el)) return cache.get(el);
+
+    const hidden = isHiddenByAttributes(el) || hasHiddenStyle(el);
+    cache?.set(el, hidden);
+    return hidden;
+  }
+
+  function findNearestBlockAncestor(el) {
+    let current = el;
+    while (current && current !== document.documentElement) {
+      if (isBlockElement(current)) return current;
+      current = current.parentElement;
     }
-    return groups;
+    return document.body;
   }
 
-  // --- Translation ---
+  function getElementVisibility(el, margin = 0) {
+    if (!el || !el.isConnected || isHiddenByAttributes(el)) {
+      return { renderable: false, inViewport: false };
+    }
 
-  const CHUNK_SIZE = 50;
+    if (hasHiddenStyle(el)) {
+      return { renderable: false, inViewport: false };
+    }
 
-  async function translateNodes(textNodes, onProgress) {
-    const groups = groupByBlock(textNodes);
-    const blocks = [...groups.entries()];
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      return { renderable: false, inViewport: false };
+    }
 
-    for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
-      if (abortController?.signal.aborted) return;
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const inViewport = (
+      rect.bottom >= -margin &&
+      rect.top <= vh + margin &&
+      rect.right >= -margin &&
+      rect.left <= vw + margin
+    );
 
-      const chunk = blocks.slice(i, i + CHUNK_SIZE);
-      const texts = chunk.map(([, nodes]) => nodes.map(n => n.nodeValue).join(''));
+    return { renderable: true, inViewport };
+  }
 
-      // Skip chunks with no real text
-      const nonEmpty = texts.map((t, j) => [t, j]).filter(([t]) => t.trim());
-      if (!nonEmpty.length) { onProgress?.((i + chunk.length) / blocks.length); continue; }
+  function collectBlocks(root) {
+    if (!root) return [];
 
-      try {
-        const translations = await translator.translateBatch(nonEmpty.map(([t]) => t));
+    const startElement = root.nodeType === Node.ELEMENT_NODE
+      ? root
+      : root.parentElement;
 
-        pauseObserver();
-        try {
-          let ti = 0;
-          for (const [, j] of nonEmpty) {
-            const [, nodes] = chunk[j];
-            for (const n of nodes) {
-              if (!originals.has(n)) {
-                originals.set(n, n.nodeValue);
-                originalNodes.add(n);
-              }
-            }
-            nodes[0].nodeValue = translations[ti++];
-            for (let k = 1; k < nodes.length; k++) nodes[k].nodeValue = '';
-          }
-        } finally {
-          resumeObserver();
-        }
-      } catch (e) {
-        if (e.name === 'AbortError') return;
-        console.warn('[yaku] translation error:', e);
+    const initialBlock = startElement
+      ? findNearestBlockAncestor(startElement)
+      : document.body;
+
+    const hiddenCache = new WeakMap();
+    const blockMap = new Map();
+    const stack = [{ node: root, block: initialBlock }];
+
+    while (stack.length > 0) {
+      const { node, block } = stack.pop();
+
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.nodeValue;
+        if (!text || !text.trim() || originals.has(node)) continue;
+        if (!block || !block.isConnected) continue;
+
+        if (!blockMap.has(block)) blockMap.set(block, []);
+        blockMap.get(block).push(node);
+        continue;
       }
 
-      onProgress?.(Math.min(1, (i + chunk.length) / blocks.length));
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+      const el = node;
+      if (shouldSkipElement(el) || isHiddenForTraversal(el, hiddenCache)) continue;
+
+      let currentBlock = block;
+      if (isBlockElement(el)) currentBlock = el;
+
+      const children = el.childNodes;
+      for (let i = children.length - 1; i >= 0; i--) {
+        stack.push({ node: children[i], block: currentBlock });
+      }
     }
+
+    const blocks = [];
+    for (const [element, nodes] of blockMap.entries()) {
+      if (!nodes.length) continue;
+      const text = nodes.map((n) => n.nodeValue).join('');
+      if (!text.trim()) continue;
+      blocks.push({ element, nodes, text });
+    }
+
+    return blocks;
   }
 
-  // --- MutationObserver for dynamic content ---
+  function normalizeBlocks(blocks) {
+    const byElement = new Map();
 
-  let observerPaused = false;
+    for (const block of blocks) {
+      if (!block?.element || !block.element.isConnected) continue;
+
+      let set = byElement.get(block.element);
+      if (!set) {
+        set = new Set();
+        byElement.set(block.element, set);
+      }
+
+      for (const node of block.nodes || []) {
+        if (!node || !node.isConnected || originals.has(node)) continue;
+        const value = node.nodeValue;
+        if (!value || !value.trim()) continue;
+        set.add(node);
+      }
+    }
+
+    const normalized = [];
+    for (const [element, nodeSet] of byElement.entries()) {
+      const nodes = [...nodeSet];
+      if (!nodes.length) continue;
+
+      const text = nodes.map((n) => n.nodeValue).join('');
+      if (!text.trim()) continue;
+
+      normalized.push({ element, nodes, text });
+    }
+
+    return normalized;
+  }
+
+  function partitionBlocksByViewport(blocks) {
+    const inViewport = [];
+    const deferred = [];
+
+    for (const block of blocks) {
+      const visibility = getElementVisibility(block.element, VIEWPORT_MARGIN_PX);
+      if (!visibility.renderable) continue;
+      if (visibility.inViewport) inViewport.push(block);
+      else deferred.push(block);
+    }
+
+    return { inViewport, deferred };
+  }
+
+  function buildBatches(blocks) {
+    const batches = [];
+    let current = [];
+    let chars = 0;
+
+    for (const block of blocks) {
+      const len = block.text.length;
+      const shouldSplit = (
+        current.length > 0 &&
+        (current.length >= BATCH_MAX_BLOCKS || chars + len > BATCH_MAX_CHARS)
+      );
+
+      if (shouldSplit) {
+        batches.push(current);
+        current = [];
+        chars = 0;
+      }
+
+      current.push(block);
+      chars += len;
+    }
+
+    if (current.length > 0) batches.push(current);
+    return batches;
+  }
 
   function pauseObserver() { observerPaused = true; }
   function resumeObserver() { observerPaused = false; }
+
+  function applyBatch(batch, translations) {
+    pauseObserver();
+    try {
+      for (let i = 0; i < batch.length; i++) {
+        const block = batch[i];
+        const translatedText = translations[i];
+        if (typeof translatedText !== 'string' || block.nodes.length === 0) continue;
+
+        for (const node of block.nodes) {
+          if (!originals.has(node)) {
+            originals.set(node, node.nodeValue);
+            originalNodes.add(node);
+          }
+        }
+
+        try {
+          block.nodes[0].nodeValue = translatedText;
+          for (let k = 1; k < block.nodes.length; k++) {
+            block.nodes[k].nodeValue = '';
+          }
+        } catch {
+          // Ignore disconnected nodes
+        }
+      }
+    } finally {
+      resumeObserver();
+    }
+  }
+
+  async function translateBlocks(blocks, onProgress) {
+    if (!translator) return 0;
+
+    const normalized = normalizeBlocks(blocks);
+    if (!normalized.length) {
+      onProgress?.(1);
+      return 0;
+    }
+
+    const batches = buildBatches(normalized);
+    let completed = 0;
+    let translatedCount = 0;
+    let nextBatch = 0;
+
+    const workerCount = Math.min(BATCH_CONCURRENCY, batches.length);
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (true) {
+        if (abortController?.signal.aborted || !translator) return;
+
+        const batchIndex = nextBatch;
+        nextBatch += 1;
+        if (batchIndex >= batches.length) return;
+
+        const batch = batches[batchIndex];
+
+        try {
+          const translations = await translator.translateBatch(batch.map((item) => item.text));
+          if (abortController?.signal.aborted || !translator) return;
+          applyBatch(batch, translations);
+          translatedCount += batch.length;
+        } catch (e) {
+          if (e.name === 'AbortError') return;
+          console.warn('[yaku] translation error:', e);
+        } finally {
+          completed += 1;
+          onProgress?.(completed / batches.length);
+        }
+      }
+    });
+
+    await Promise.all(workers);
+    return translatedCount;
+  }
+
+  function ensureVisibilityObserver() {
+    if (visibilityObserver) return;
+
+    visibilityObserver = new IntersectionObserver((entries) => {
+      if (!translator || observerPaused) return;
+
+      const ready = [];
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+
+        const block = pendingVisibilityBlocks.get(entry.target);
+        if (!block) continue;
+
+        pendingVisibilityBlocks.delete(entry.target);
+        visibilityObserver.unobserve(entry.target);
+        const nodes = [...block.nodeSet];
+        if (nodes.length) ready.push({ element: block.element, nodes, text: '' });
+      }
+
+      sendStatus({ type: 'yaku-deferred', pending: pendingVisibilityBlocks.size });
+      if (ready.length) enqueueBlockTranslation(ready);
+    }, {
+      root: null,
+      rootMargin: `${VIEWPORT_MARGIN_PX}px 0px ${VIEWPORT_MARGIN_PX}px 0px`,
+      threshold: 0.01,
+    });
+  }
+
+  function addDeferredBlocks(blocks) {
+    if (!blocks.length) return;
+
+    ensureVisibilityObserver();
+
+    for (const block of blocks) {
+      if (!block?.element || !block.element.isConnected) continue;
+
+      const existing = pendingVisibilityBlocks.get(block.element);
+      if (existing) {
+        for (const node of block.nodes) existing.nodeSet.add(node);
+      } else {
+        const nodeSet = new Set();
+        for (const node of block.nodes) nodeSet.add(node);
+        pendingVisibilityBlocks.set(block.element, {
+          element: block.element,
+          nodeSet,
+        });
+        visibilityObserver.observe(block.element);
+      }
+    }
+
+    sendStatus({ type: 'yaku-deferred', pending: pendingVisibilityBlocks.size });
+  }
+
+  function enqueueBlockTranslation(blocks) {
+    if (!blocks.length || !translator) return;
+
+    const work = async () => {
+      if (abortController?.signal.aborted || !translator) return;
+      await translateBlocks(blocks);
+    };
+
+    translationQueue = translationQueue
+      .then(work)
+      .catch((e) => console.warn('[yaku] incremental translation error:', e));
+  }
+
+  function queueMutationRoot(node) {
+    if (!node) return;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.parentElement) pendingMutationRoots.add(node.parentElement);
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      pendingMutationRoots.add(node);
+    }
+
+    if (mutationTimer) return;
+
+    mutationTimer = setTimeout(() => {
+      mutationTimer = null;
+      flushMutationQueue();
+    }, MUTATION_DEBOUNCE_MS);
+  }
+
+  function flushMutationQueue() {
+    if (observerPaused || !translator || abortController?.signal.aborted) {
+      pendingMutationRoots.clear();
+      return;
+    }
+
+    const roots = [...pendingMutationRoots];
+    pendingMutationRoots.clear();
+    if (!roots.length) return;
+
+    const blocks = [];
+    for (const root of roots) {
+      if (!root.isConnected) continue;
+      blocks.push(...collectBlocks(root));
+    }
+
+    const normalized = normalizeBlocks(blocks);
+    if (!normalized.length) return;
+
+    const { inViewport, deferred } = partitionBlocksByViewport(normalized);
+    if (deferred.length) addDeferredBlocks(deferred);
+    if (inViewport.length) enqueueBlockTranslation(inViewport);
+  }
 
   function startObserver() {
     if (observer) observer.disconnect();
@@ -115,37 +420,42 @@
     observer = new MutationObserver((mutations) => {
       if (observerPaused || !translator) return;
 
-      const newTextNodes = [];
       for (const mutation of mutations) {
-        if (mutation.type === 'childList') {
-          for (const node of mutation.addedNodes) {
-            if (node.nodeType === Node.TEXT_NODE) {
-              if (node.nodeValue.trim() && !originals.has(node)) newTextNodes.push(node);
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-              for (const tn of getTextNodes(node)) {
-                if (!originals.has(tn)) newTextNodes.push(tn);
-              }
-            }
-          }
+        if (mutation.type !== 'childList') continue;
+        for (const node of mutation.addedNodes) {
+          queueMutationRoot(node);
         }
-      }
-
-      if (newTextNodes.length > 0 && translator) {
-        const work = () => translateNodes(newTextNodes, (p) => {
-          sendStatus({ type: 'yaku-progress', progress: p, incremental: true });
-        });
-        mutationQueue = (mutationQueue || Promise.resolve()).then(work).catch(e => console.warn('[yaku] mutation translation error:', e));
       }
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
   }
 
   function stopObserver() {
-    if (observer) { observer.disconnect(); observer = null; }
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+
+    if (mutationTimer) {
+      clearTimeout(mutationTimer);
+      mutationTimer = null;
+    }
+
+    pendingMutationRoots.clear();
   }
 
-  // --- Restore originals ---
+  function stopVisibilityObserver() {
+    if (visibilityObserver) {
+      visibilityObserver.disconnect();
+      visibilityObserver = null;
+    }
+    pendingVisibilityBlocks.clear();
+    sendStatus({ type: 'yaku-deferred', pending: 0 });
+  }
 
   function revertNodes() {
     pauseObserver();
@@ -163,12 +473,60 @@
   function restoreOriginals() {
     revertNodes();
     stopObserver();
-    if (translator) { translator.destroy(); translator = null; }
+    stopVisibilityObserver();
+    translationQueue = Promise.resolve();
+    if (translator) {
+      translator.destroy();
+      translator = null;
+    }
     isTranslating = false;
-    mutationQueue = null;
   }
 
-  // --- Message handling (from service worker via chrome.runtime) ---
+  function getTextNodes(root) {
+    const nodes = [];
+    const hiddenCache = new WeakMap();
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const text = node.nodeValue;
+        if (!text || !text.trim() || originals.has(node)) return NodeFilter.FILTER_REJECT;
+
+        let el = node.parentElement;
+        while (el) {
+          if (shouldSkipElement(el) || isHiddenForTraversal(el, hiddenCache)) return NodeFilter.FILTER_REJECT;
+          el = el.parentElement;
+        }
+
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    while (walker.nextNode()) {
+      nodes.push(walker.currentNode);
+    }
+
+    return nodes;
+  }
+
+  function groupSelectionByBlock(textNodes) {
+    const groups = new Map();
+
+    for (const node of textNodes) {
+      const block = findNearestBlockAncestor(node.parentElement || document.body);
+      if (!groups.has(block)) groups.set(block, []);
+      groups.get(block).push(node);
+    }
+
+    const blocks = [];
+    for (const [element, nodes] of groups.entries()) {
+      const visibility = getElementVisibility(element, VIEWPORT_MARGIN_PX);
+      if (!visibility.renderable) continue;
+      const text = nodes.map((n) => n.nodeValue).join('');
+      if (!text.trim()) continue;
+      blocks.push({ element, nodes, text });
+    }
+
+    return blocks;
+  }
 
   function sendStatus(data) {
     chrome.runtime.sendMessage({ ...data, source: 'yaku-content' });
@@ -176,9 +534,10 @@
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === 'hasSelection') {
-      sendResponse(window.getSelection().toString().trim().length > 0);
+      sendResponse(window.getSelection()?.toString().trim().length > 0);
       return;
     }
+
     if (msg.type === 'detect') {
       handleDetect();
     } else if (msg.type === 'translate') {
@@ -194,22 +553,33 @@
   });
 
   async function handleDetect() {
+    if (detectInFlight) return;
+    detectInFlight = true;
     try {
       const result = await YakuTranslator.detectLanguage();
+      hasDetectedLanguage = true;
       sendStatus({ type: 'yaku-detected', ...result });
     } catch {
+      hasDetectedLanguage = true;
       sendStatus({ type: 'yaku-detected', language: 'und', confidence: 0 });
+    } finally {
+      detectInFlight = false;
     }
   }
 
   async function handleTranslate(msg) {
     if (isTranslating) return;
 
-    // Restore originals before re-translating so we always translate from the real source text
+    // Restore originals before re-translating so we always translate from source text
     if (originalNodes.size > 0) {
       revertNodes();
       stopObserver();
-      if (translator) { translator.destroy(); translator = null; }
+      stopVisibilityObserver();
+      if (translator) {
+        translator.destroy();
+        translator = null;
+      }
+      translationQueue = Promise.resolve();
     }
 
     isTranslating = true;
@@ -217,53 +587,85 @@
     const signal = abortController.signal;
 
     try {
-      // Auto-detect if needed
       let sourceLang = msg.from;
+      let pendingDeferred = 0;
       if (sourceLang === 'auto') {
         sendStatus({ type: 'yaku-status', status: 'detecting' });
         const detected = await YakuTranslator.detectLanguage();
-        if (signal.aborted) { isTranslating = false; return; }
+        if (signal.aborted) {
+          isTranslating = false;
+          return;
+        }
+
         sourceLang = detected.language;
+        hasDetectedLanguage = true;
         if (sourceLang === 'und') {
           sendStatus({ type: 'yaku-error', error: 'Could not detect page language.' });
           isTranslating = false;
           return;
         }
+
         sendStatus({ type: 'yaku-detected', language: sourceLang, confidence: detected.confidence });
       }
 
-      if (signal.aborted) { isTranslating = false; return; }
+      if (signal.aborted) {
+        isTranslating = false;
+        return;
+      }
 
-      // Create translator
       translator = YakuTranslator.create(sourceLang, msg.to);
-
-      // Translate page or selection
       sendStatus({ type: 'yaku-status', status: 'translating' });
-      let textNodes;
+
       if (msg.mode === 'selection') {
         const sel = window.getSelection();
-        textNodes = [];
+        if (!sel) {
+          sendStatus({ type: 'yaku-error', error: 'Could not read page selection.' });
+          isTranslating = false;
+          return;
+        }
+
+        const selectedNodes = [];
+        const seen = new Set();
+
         for (let i = 0; i < sel.rangeCount; i++) {
           const range = sel.getRangeAt(i);
           const container = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
-            ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement;
-          for (const n of getTextNodes(container || document.body)) {
+            ? range.commonAncestorContainer
+            : range.commonAncestorContainer.parentElement;
+
+          for (const node of getTextNodes(container || document.body)) {
             try {
-              if (range.comparePoint(n, 0) <= 0 && range.comparePoint(n, n.length) >= 0)
-                textNodes.push(n);
-            } catch { /* node outside range's root */ }
+              if (range.comparePoint(node, 0) <= 0 && range.comparePoint(node, node.length) >= 0) {
+                if (!seen.has(node)) {
+                  seen.add(node);
+                  selectedNodes.push(node);
+                }
+              }
+            } catch {
+              // Node may be outside range root
+            }
           }
         }
+
+        const blocks = groupSelectionByBlock(selectedNodes);
+        await translateBlocks(blocks, (progress) => {
+          sendStatus({ type: 'yaku-progress', progress });
+        });
       } else {
-        textNodes = getTextNodes(document.body);
+        const allBlocks = normalizeBlocks(collectBlocks(document.body));
+        const { inViewport, deferred } = partitionBlocksByViewport(allBlocks);
+
+        await translateBlocks(inViewport, (progress) => {
+          sendStatus({ type: 'yaku-progress', progress });
+        });
+
+        addDeferredBlocks(deferred);
+        pendingDeferred = pendingVisibilityBlocks.size;
       }
-      await translateNodes(textNodes, (progress) => {
-        sendStatus({ type: 'yaku-progress', progress });
-      });
 
       if (!signal.aborted) {
         if (msg.mode !== 'selection') startObserver();
-        sendStatus({ type: 'yaku-done', from: sourceLang, to: msg.to });
+        sendStatus({ type: 'yaku-done', from: sourceLang, to: msg.to, pendingDeferred });
       }
     } catch (e) {
       if (!signal.aborted) {
@@ -274,6 +676,8 @@
     isTranslating = false;
   }
 
-  // Auto-detect language on load
-  setTimeout(handleDetect, 500);
+  // Fallback detect in case the worker's initial detect message was missed.
+  setTimeout(() => {
+    if (!hasDetectedLanguage && !isTranslating) handleDetect();
+  }, 1500);
 })();

@@ -133,6 +133,7 @@ const settingsToggle = document.getElementById('settingsToggle');
 const settingsPanel = document.getElementById('settingsPanel');
 const apiKeyInput = document.getElementById('apiKeyInput');
 const apiKeySave = document.getElementById('apiKeySave');
+let activeTabId = null;
 
 function populateLists(detectedLang) {
   fromList.innerHTML = '';
@@ -145,7 +146,10 @@ function populateLists(detectedLang) {
     fromList.append(opt.cloneNode(true));
   }
 
-  // Update placeholder with detected language
+  updateDetectedPlaceholder(detectedLang);
+}
+
+function updateDetectedPlaceholder(detectedLang) {
   if (detectedLang && detectedLang !== 'und') {
     const detected = CODE_TO_NAME[detectedLang] || detectedLang;
     fromEl.placeholder = `Auto-detect (${detected})`;
@@ -182,7 +186,15 @@ function renderState(state) {
     btn.className = 'cancel';
     btn.disabled = false;
     btn.onclick = doRestore;
-    statusEl.textContent = `Translating to ${langName}`;
+    if (s === 'detecting') {
+      statusEl.textContent = 'Detecting page language';
+    } else if (s === 'translating') {
+      statusEl.textContent = `Translating to ${langName}`;
+    } else if (state.pendingDeferred > 0) {
+      statusEl.textContent = `Visible content translated to ${langName}. More translates on scroll.`;
+    } else {
+      statusEl.textContent = `Translated to ${langName}`;
+    }
   } else {
     btn.textContent = 'Translate';
     btn.className = '';
@@ -227,14 +239,6 @@ function doTranslate() {
 function doRestore() {
   chrome.runtime.sendMessage({ type: 'cancel' });
   renderState({ status: 'idle' });
-}
-
-// Poll state from service worker
-function pollState() {
-  chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
-    if (chrome.runtime.lastError) return;
-    if (state) renderState(state);
-  });
 }
 
 // Favorites
@@ -324,8 +328,6 @@ chrome.storage.local.get(['apiKey', 'favLangs', 'lastTargetLang'], ({ apiKey, fa
   renderFavs(favLangs || []);
 });
 
-setInterval(pollState, 500);
-
 // Mode toggle
 modeToggle.addEventListener('click', (e) => {
   const b = e.target.closest('button');
@@ -334,9 +336,26 @@ modeToggle.addEventListener('click', (e) => {
   b.classList.add('active');
 });
 
-// Check if page has a text selection, enable/disable Selection button
+// Receive pushed state updates from service worker
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type !== 'yaku-state') return;
+  if (activeTabId == null || msg.tabId !== activeTabId) return;
+  if (!msg.state) return;
+
+  if (msg.state.detectedLang !== undefined && msg.state.detectedLang !== detectedPageLang) {
+    detectedPageLang = msg.state.detectedLang;
+    updateDetectedPlaceholder(detectedPageLang);
+  }
+
+  renderState(msg.state);
+  updateBtn();
+});
+
+// Track active tab and check if page has a text selection
 chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
   if (!tab) return;
+  activeTabId = tab.id;
+
   chrome.tabs.sendMessage(tab.id, { type: 'hasSelection' }, (hasSelection) => {
     if (chrome.runtime.lastError || !hasSelection) return;
     const selBtn = modeToggle.querySelector('[data-mode="selection"]');
