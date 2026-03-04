@@ -22,6 +22,7 @@
 
   let originals = new WeakMap();  // node -> original textContent
   let originalNodes = new Set();  // track nodes for restore iteration
+  let dirtyTranslatedNodes = new WeakSet(); // translated nodes changed by page scripts
   let translator = null;
   let observer = null;
   let visibilityObserver = null;
@@ -169,7 +170,8 @@
       }
 
       for (const node of block.nodes || []) {
-        if (!node || !node.isConnected || originals.has(node)) continue;
+        if (!node || !node.isConnected) continue;
+        if (originals.has(node) && !dirtyTranslatedNodes.has(node)) continue;
         const value = node.nodeValue;
         if (!value || !value.trim()) continue;
         set.add(node);
@@ -237,22 +239,22 @@
     pauseObserver();
     try {
       for (let i = 0; i < batch.length; i++) {
-        const block = batch[i];
+        const item = batch[i];
         const translatedText = translations[i];
-        if (typeof translatedText !== 'string' || block.nodes.length === 0) continue;
+        const node = item.node;
+        if (typeof translatedText !== 'string' || !node?.isConnected) continue;
 
-        for (const node of block.nodes) {
-          if (!originals.has(node)) {
-            originals.set(node, node.nodeValue);
-            originalNodes.add(node);
-          }
+        if (!originals.has(node)) {
+          originals.set(node, node.nodeValue);
+          originalNodes.add(node);
+        } else if (dirtyTranslatedNodes.has(node)) {
+          // Track the most recent source text so "Stop" restores correctly.
+          originals.set(node, node.nodeValue);
+          dirtyTranslatedNodes.delete(node);
         }
 
         try {
-          block.nodes[0].nodeValue = translatedText;
-          for (let k = 1; k < block.nodes.length; k++) {
-            block.nodes[k].nodeValue = '';
-          }
+          node.nodeValue = `${item.leadingWhitespace}${translatedText}${item.trailingWhitespace}`;
         } catch {
           // Ignore disconnected nodes
         }
@@ -266,12 +268,35 @@
     if (!translator) return 0;
 
     const normalized = normalizeBlocks(blocks);
-    if (!normalized.length) {
+    const items = [];
+    for (const block of normalized) {
+      for (const node of block.nodes) {
+        const text = node.nodeValue;
+        if (!text || !text.trim()) continue;
+
+        const match = text.match(/^(\s*)([\s\S]*?)(\s*)$/);
+        if (!match) continue;
+
+        const leadingWhitespace = match[1];
+        const coreText = match[2];
+        const trailingWhitespace = match[3];
+        if (!coreText.trim()) continue;
+
+        items.push({
+          node,
+          text: coreText,
+          leadingWhitespace,
+          trailingWhitespace,
+        });
+      }
+    }
+
+    if (!items.length) {
       onProgress?.(1);
       return 0;
     }
 
-    const batches = buildBatches(normalized);
+    const batches = buildBatches(items);
     let completed = 0;
     let translatedCount = 0;
     let nextBatch = 0;
@@ -415,22 +440,32 @@
   }
 
   function startObserver() {
+    const root = document.documentElement || document.body;
+    if (!root) return;
+
     if (observer) observer.disconnect();
 
     observer = new MutationObserver((mutations) => {
       if (observerPaused || !translator) return;
 
       for (const mutation of mutations) {
-        if (mutation.type !== 'childList') continue;
-        for (const node of mutation.addedNodes) {
-          queueMutationRoot(node);
+        if (mutation.type === 'childList') {
+          for (const node of mutation.addedNodes) {
+            queueMutationRoot(node);
+          }
+        } else if (mutation.type === 'characterData') {
+          if (mutation.target?.nodeType === Node.TEXT_NODE && originals.has(mutation.target)) {
+            dirtyTranslatedNodes.add(mutation.target);
+          }
+          queueMutationRoot(mutation.target);
         }
       }
     });
 
-    observer.observe(document.body, {
+    observer.observe(root, {
       childList: true,
       subtree: true,
+      characterData: true,
     });
   }
 
@@ -479,53 +514,9 @@
       translator.destroy();
       translator = null;
     }
+    dirtyTranslatedNodes = new WeakSet();
+    abortController = null;
     isTranslating = false;
-  }
-
-  function getTextNodes(root) {
-    const nodes = [];
-    const hiddenCache = new WeakMap();
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        const text = node.nodeValue;
-        if (!text || !text.trim() || originals.has(node)) return NodeFilter.FILTER_REJECT;
-
-        let el = node.parentElement;
-        while (el) {
-          if (shouldSkipElement(el) || isHiddenForTraversal(el, hiddenCache)) return NodeFilter.FILTER_REJECT;
-          el = el.parentElement;
-        }
-
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-
-    while (walker.nextNode()) {
-      nodes.push(walker.currentNode);
-    }
-
-    return nodes;
-  }
-
-  function groupSelectionByBlock(textNodes) {
-    const groups = new Map();
-
-    for (const node of textNodes) {
-      const block = findNearestBlockAncestor(node.parentElement || document.body);
-      if (!groups.has(block)) groups.set(block, []);
-      groups.get(block).push(node);
-    }
-
-    const blocks = [];
-    for (const [element, nodes] of groups.entries()) {
-      const visibility = getElementVisibility(element, VIEWPORT_MARGIN_PX);
-      if (!visibility.renderable) continue;
-      const text = nodes.map((n) => n.nodeValue).join('');
-      if (!text.trim()) continue;
-      blocks.push({ element, nodes, text });
-    }
-
-    return blocks;
   }
 
   function sendStatus(data) {
@@ -533,23 +524,17 @@
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg.type === 'hasSelection') {
-      sendResponse(window.getSelection()?.toString().trim().length > 0);
-      return;
-    }
-
     if (msg.type === 'detect') {
       handleDetect();
-    } else if (msg.type === 'translate') {
-      handleTranslate(msg);
-    } else if (msg.type === 'cancel') {
+    } else if (msg.type === 'activate' || msg.type === 'translate') {
+      handleActivate(msg);
+    } else if (msg.type === 'deactivate' || msg.type === 'cancel' || msg.type === 'restore') {
       if (abortController) abortController.abort();
       restoreOriginals();
-      sendStatus({ type: 'yaku-cancelled' });
-    } else if (msg.type === 'restore') {
-      restoreOriginals();
-      sendStatus({ type: 'yaku-restored' });
+      sendStatus({ type: 'yaku-inactive' });
     }
+
+    if (msg.type === 'hasSelection') sendResponse(false);
   });
 
   async function handleDetect() {
@@ -567,7 +552,7 @@
     }
   }
 
-  async function handleTranslate(msg) {
+  async function handleActivate(msg) {
     if (isTranslating) return;
 
     // Restore originals before re-translating so we always translate from source text
@@ -594,6 +579,7 @@
         const detected = await YakuTranslator.detectLanguage();
         if (signal.aborted) {
           isTranslating = false;
+          abortController = null;
           return;
         }
 
@@ -602,6 +588,7 @@
         if (sourceLang === 'und') {
           sendStatus({ type: 'yaku-error', error: 'Could not detect page language.' });
           isTranslating = false;
+          abortController = null;
           return;
         }
 
@@ -610,61 +597,26 @@
 
       if (signal.aborted) {
         isTranslating = false;
+        abortController = null;
         return;
       }
 
       translator = YakuTranslator.create(sourceLang, msg.to);
       sendStatus({ type: 'yaku-status', status: 'translating' });
 
-      if (msg.mode === 'selection') {
-        const sel = window.getSelection();
-        if (!sel) {
-          sendStatus({ type: 'yaku-error', error: 'Could not read page selection.' });
-          isTranslating = false;
-          return;
-        }
+      const root = document.body || document.documentElement;
+      const allBlocks = normalizeBlocks(collectBlocks(root));
+      const { inViewport, deferred } = partitionBlocksByViewport(allBlocks);
 
-        const selectedNodes = [];
-        const seen = new Set();
+      await translateBlocks(inViewport, (progress) => {
+        sendStatus({ type: 'yaku-progress', progress });
+      });
 
-        for (let i = 0; i < sel.rangeCount; i++) {
-          const range = sel.getRangeAt(i);
-          const container = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
-            ? range.commonAncestorContainer
-            : range.commonAncestorContainer.parentElement;
-
-          for (const node of getTextNodes(container || document.body)) {
-            try {
-              if (range.comparePoint(node, 0) <= 0 && range.comparePoint(node, node.length) >= 0) {
-                if (!seen.has(node)) {
-                  seen.add(node);
-                  selectedNodes.push(node);
-                }
-              }
-            } catch {
-              // Node may be outside range root
-            }
-          }
-        }
-
-        const blocks = groupSelectionByBlock(selectedNodes);
-        await translateBlocks(blocks, (progress) => {
-          sendStatus({ type: 'yaku-progress', progress });
-        });
-      } else {
-        const allBlocks = normalizeBlocks(collectBlocks(document.body));
-        const { inViewport, deferred } = partitionBlocksByViewport(allBlocks);
-
-        await translateBlocks(inViewport, (progress) => {
-          sendStatus({ type: 'yaku-progress', progress });
-        });
-
-        addDeferredBlocks(deferred);
-        pendingDeferred = pendingVisibilityBlocks.size;
-      }
+      addDeferredBlocks(deferred);
+      pendingDeferred = pendingVisibilityBlocks.size;
 
       if (!signal.aborted) {
-        if (msg.mode !== 'selection') startObserver();
+        startObserver();
         sendStatus({ type: 'yaku-done', from: sourceLang, to: msg.to, pendingDeferred });
       }
     } catch (e) {
@@ -674,10 +626,13 @@
     }
 
     isTranslating = false;
+    abortController = null;
   }
 
   // Fallback detect in case the worker's initial detect message was missed.
   setTimeout(() => {
     if (!hasDetectedLanguage && !isTranslating) handleDetect();
   }, 1500);
+
+  sendStatus({ type: 'yaku-ready' });
 })();

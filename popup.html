@@ -123,10 +123,6 @@ button:disabled { opacity: 0.5; cursor: default; }
   padding: 4px 10px;
   font-size: 11px;
 }
-.mode-toggle { display: flex; gap: 4px; margin-bottom: 10px; }
-.mode-toggle button { flex: 1; padding: 4px; border: 1px solid var(--border); background: none; font-size: 11px; cursor: pointer; color: var(--text-dim); border-radius: 10px; }
-.mode-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.mode-toggle button:disabled { opacity: 0.35; cursor: default; }
 [hidden] { display: none !important; }
 .favs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
 .favs span { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; white-space: nowrap; color: var(--text-mid); }
@@ -150,10 +146,6 @@ button:disabled { opacity: 0.5; cursor: default; }
       <datalist id="toList"></datalist>
     </div>
     <div class="favs" id="favs"></div>
-    <div class="mode-toggle" id="modeToggle">
-      <button class="active" data-mode="page">Whole page</button>
-      <button data-mode="selection" disabled>Selection</button>
-    </div>
   </div>
   <button id="btn">Translate</button>
   <div class="status" id="status"></div>

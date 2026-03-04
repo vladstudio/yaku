@@ -1,25 +1,75 @@
 // service-worker.js — Background coordinator
 // Routes messages between popup and content scripts, manages badge icon
 
-const tabState = {}; // tabId -> { status, detectedLang, from, to, progress }
-
 const API_BASE = 'https://translation.googleapis.com/language/translate/v2';
+const SESSION_TAB_STATE_KEY = 'tabStateV2';
+
+const tabState = Object.create(null);
+let stateHydrationPromise = null;
 
 let cachedApiKey = null;
 let apiKeyLoaded = false;
 
+function createDefaultState() {
+  return {
+    active: false,
+    status: 'idle',
+    detectedLang: null,
+    from: 'auto',
+    to: 'en',
+    progress: 0,
+    pendingDeferred: 0,
+    error: null,
+  };
+}
+
 function getState(tabId) {
-  if (!tabState[tabId]) {
-    tabState[tabId] = {
-      status: 'idle',
-      detectedLang: null,
-      from: 'auto',
-      to: 'en',
-      progress: 0,
-      pendingDeferred: 0,
-    };
-  }
+  if (!tabState[tabId]) tabState[tabId] = createDefaultState();
   return tabState[tabId];
+}
+
+function normalizeLoadedState(raw) {
+  return {
+    ...createDefaultState(),
+    ...(raw || {}),
+    active: !!raw?.active,
+  };
+}
+
+async function hydrateTabState() {
+  if (stateHydrationPromise) return stateHydrationPromise;
+
+  stateHydrationPromise = (async () => {
+    try {
+      const stored = await chrome.storage.session.get(SESSION_TAB_STATE_KEY);
+      const loaded = stored?.[SESSION_TAB_STATE_KEY];
+      if (!loaded || typeof loaded !== 'object') return;
+
+      for (const [key, raw] of Object.entries(loaded)) {
+        const tabId = Number(key);
+        if (!Number.isFinite(tabId)) continue;
+        tabState[tabId] = normalizeLoadedState(raw);
+      }
+
+      // Drop stale states for tabs that no longer exist.
+      const tabs = await chrome.tabs.query({});
+      const live = new Set(tabs.map((tab) => tab.id));
+      for (const key of Object.keys(tabState)) {
+        const tabId = Number(key);
+        if (!live.has(tabId)) delete tabState[tabId];
+      }
+    } catch {
+      // Ignore storage/session failures.
+    }
+  })();
+
+  return stateHydrationPromise;
+}
+
+function persistTabState() {
+  return chrome.storage.session
+    .set({ [SESSION_TAB_STATE_KEY]: tabState })
+    .catch(() => {});
 }
 
 function updateBadge(tabId, progress) {
@@ -38,6 +88,32 @@ function notifyState(tabId) {
     type: 'yaku-state',
     tabId,
     state: getState(tabId),
+  }).catch(() => {});
+}
+
+function setInactive(state, tabId) {
+  state.active = false;
+  state.status = 'idle';
+  state.progress = 0;
+  state.pendingDeferred = 0;
+  state.error = null;
+  resetBadge(tabId);
+}
+
+async function activateInTab(tabId, state) {
+  if (!state?.active) return;
+
+  state.status = 'detecting';
+  state.progress = 0;
+  state.pendingDeferred = 0;
+  state.error = null;
+  notifyState(tabId);
+  await persistTabState();
+
+  chrome.tabs.sendMessage(tabId, {
+    type: 'activate',
+    from: state.from,
+    to: state.to,
   }).catch(() => {});
 }
 
@@ -91,93 +167,111 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.source === 'yaku-content') {
     if (!tabId) return;
 
-    const state = getState(tabId);
+    (async () => {
+      await hydrateTabState();
+      const state = getState(tabId);
 
-    if (msg.type === 'yaku-detected') {
-      state.detectedLang = msg.language;
-    } else if (msg.type === 'yaku-status') {
-      state.status = msg.status;
-      if (msg.status === 'translating') {
-        state.progress = 0;
-        state.pendingDeferred = 0;
-        updateBadge(tabId, 0);
+      if (msg.type === 'yaku-ready') {
+        if (state.active) {
+          await activateInTab(tabId, state);
+        } else {
+          chrome.tabs.sendMessage(tabId, { type: 'detect' }).catch(() => {});
+        }
+        return;
       }
-    } else if (msg.type === 'yaku-progress') {
-      state.progress = msg.progress;
-      if (state.status === 'translating') updateBadge(tabId, msg.progress);
-    } else if (msg.type === 'yaku-deferred') {
-      state.pendingDeferred = msg.pending || 0;
-    } else if (msg.type === 'yaku-done') {
-      state.status = 'done';
-      state.from = msg.from;
-      state.to = msg.to;
-      state.progress = 1;
-      state.pendingDeferred = msg.pendingDeferred || 0;
-      resetBadge(tabId);
-    } else if (msg.type === 'yaku-error') {
-      state.status = 'error';
-      state.error = msg.error;
-      state.pendingDeferred = 0;
-      resetBadge(tabId);
-    } else if (msg.type === 'yaku-cancelled' || msg.type === 'yaku-restored') {
-      state.status = 'idle';
-      state.progress = 0;
-      state.pendingDeferred = 0;
-      resetBadge(tabId);
-    }
 
-    notifyState(tabId);
+      if (msg.type === 'yaku-detected') {
+        state.detectedLang = msg.language;
+      } else if (msg.type === 'yaku-status') {
+        state.status = msg.status;
+        state.error = null;
+        if (msg.status === 'translating') {
+          state.progress = 0;
+          state.pendingDeferred = 0;
+          updateBadge(tabId, 0);
+        }
+      } else if (msg.type === 'yaku-progress') {
+        state.progress = msg.progress;
+        if (state.status === 'translating') updateBadge(tabId, msg.progress);
+      } else if (msg.type === 'yaku-deferred') {
+        state.pendingDeferred = msg.pending || 0;
+      } else if (msg.type === 'yaku-done') {
+        state.active = true;
+        state.status = 'active';
+        state.from = msg.from;
+        state.to = msg.to;
+        state.progress = 1;
+        state.pendingDeferred = msg.pendingDeferred || 0;
+        state.error = null;
+        resetBadge(tabId);
+      } else if (msg.type === 'yaku-error') {
+        state.status = 'error';
+        state.error = msg.error;
+        state.pendingDeferred = 0;
+        resetBadge(tabId);
+      } else if (msg.type === 'yaku-inactive' || msg.type === 'yaku-cancelled' || msg.type === 'yaku-restored') {
+        setInactive(state, tabId);
+      }
+
+      notifyState(tabId);
+      await persistTabState();
+    })();
     return;
   }
 
   // Messages from popup
   if (msg.type === 'getState') {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    (async () => {
+      await hydrateTabState();
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]) sendResponse(getState(tabs[0].id));
-      else sendResponse({ status: 'idle' });
-    });
+      else sendResponse(createDefaultState());
+    })();
     return true;
   }
 
-  if (msg.type === 'translate' || msg.type === 'cancel' || msg.type === 'restore') {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  const isActivate = msg.type === 'activate' || msg.type === 'translate';
+  const isDeactivate = msg.type === 'deactivate' || msg.type === 'cancel' || msg.type === 'restore';
+  if (isActivate || isDeactivate) {
+    (async () => {
+      await hydrateTabState();
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tabs[0]) return;
 
       const activeTabId = tabs[0].id;
       const state = getState(activeTabId);
 
-      if (msg.type === 'translate') {
-        state.status = 'detecting';
-        state.error = null;
-        state.from = msg.from;
-        state.to = msg.to;
-        state.mode = msg.mode;
-        state.progress = 0;
-        state.pendingDeferred = 0;
+      if (isActivate) {
+        state.active = true;
+        state.from = msg.from || state.from || 'auto';
+        state.to = msg.to || state.to || 'en';
+        await activateInTab(activeTabId, state);
       } else {
-        state.status = 'idle';
-        state.error = null;
-        state.progress = 0;
-        state.pendingDeferred = 0;
-        resetBadge(activeTabId);
+        setInactive(state, activeTabId);
+        notifyState(activeTabId);
+        await persistTabState();
+        chrome.tabs.sendMessage(activeTabId, { type: 'deactivate' }).catch(() => {});
       }
-
-      notifyState(activeTabId);
-      chrome.tabs.sendMessage(activeTabId, msg).catch(() => {});
-    });
+    })();
   }
 });
 
 // Clean up state when tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
-  delete tabState[tabId];
+  (async () => {
+    await hydrateTabState();
+    delete tabState[tabId];
+    await persistTabState();
+  })();
 });
 
-// Request language detection when tab finishes loading
+// Request language detection for inactive tabs after top-level navigation.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status !== 'complete') return;
 
-  delete tabState[tabId];
-  notifyState(tabId);
-  chrome.tabs.sendMessage(tabId, { type: 'detect' }).catch(() => {});
+  (async () => {
+    await hydrateTabState();
+    const state = getState(tabId);
+    if (!state.active) chrome.tabs.sendMessage(tabId, { type: 'detect' }).catch(() => {});
+  })();
 });

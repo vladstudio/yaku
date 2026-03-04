@@ -128,7 +128,6 @@ const toList = document.getElementById('toList');
 const btn = document.getElementById('btn');
 const statusEl = document.getElementById('status');
 const favsEl = document.getElementById('favs');
-const modeToggle = document.getElementById('modeToggle');
 const settingsToggle = document.getElementById('settingsToggle');
 const settingsPanel = document.getElementById('settingsPanel');
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -175,25 +174,28 @@ function resolveLanguage(input) {
 
 function renderState(state) {
   const s = state.status;
-  const isActive = s === 'detecting' || s === 'translating' || s === 'done';
+  const isActive = !!state.active || s === 'detecting' || s === 'translating' || s === 'active' || s === 'done';
 
   controlsEl.hidden = isActive || !hasApiKey;
   statusEl.textContent = '';
 
   if (isActive) {
     const langName = CODE_TO_NAME[state.to] || state.to || toEl.value;
-    btn.textContent = 'Cancel';
+    btn.textContent = 'Stop';
     btn.className = 'cancel';
     btn.disabled = false;
-    btn.onclick = doRestore;
+    btn.onclick = doStop;
     if (s === 'detecting') {
       statusEl.textContent = 'Detecting page language';
     } else if (s === 'translating') {
       statusEl.textContent = `Translating to ${langName}`;
-    } else if (state.pendingDeferred > 0) {
-      statusEl.textContent = `Visible content translated to ${langName}. More translates on scroll.`;
+    } else if (s === 'error') {
+      const errSpan = document.createElement('span');
+      errSpan.className = 'error';
+      errSpan.textContent = state.error || 'Translation failed.';
+      statusEl.append(errSpan);
     } else {
-      statusEl.textContent = `Translated to ${langName}`;
+      statusEl.textContent = `Active in ${langName}.`;
     }
   } else {
     btn.textContent = 'Translate';
@@ -231,14 +233,13 @@ function doTranslate() {
   }
 
   chrome.storage.local.set({ lastTargetLang: to });
-  const mode = modeToggle.querySelector('.active').dataset.mode;
-  chrome.runtime.sendMessage({ type: 'translate', from, to, mode });
-  renderState({ status: 'detecting', to });
+  chrome.runtime.sendMessage({ type: 'activate', from, to });
+  renderState({ active: true, status: 'detecting', to });
 }
 
-function doRestore() {
-  chrome.runtime.sendMessage({ type: 'cancel' });
-  renderState({ status: 'idle' });
+function doStop() {
+  chrome.runtime.sendMessage({ type: 'deactivate' });
+  renderState({ active: false, status: 'idle' });
 }
 
 // Favorites
@@ -328,14 +329,6 @@ chrome.storage.local.get(['apiKey', 'favLangs', 'lastTargetLang'], ({ apiKey, fa
   renderFavs(favLangs || []);
 });
 
-// Mode toggle
-modeToggle.addEventListener('click', (e) => {
-  const b = e.target.closest('button');
-  if (!b || b.disabled) return;
-  modeToggle.querySelectorAll('button').forEach(x => x.classList.remove('active'));
-  b.classList.add('active');
-});
-
 // Receive pushed state updates from service worker
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type !== 'yaku-state') return;
@@ -351,18 +344,10 @@ chrome.runtime.onMessage.addListener((msg) => {
   updateBtn();
 });
 
-// Track active tab and check if page has a text selection
+// Track active tab for pushed state filtering
 chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
   if (!tab) return;
   activeTabId = tab.id;
-
-  chrome.tabs.sendMessage(tab.id, { type: 'hasSelection' }, (hasSelection) => {
-    if (chrome.runtime.lastError || !hasSelection) return;
-    const selBtn = modeToggle.querySelector('[data-mode="selection"]');
-    selBtn.disabled = false;
-    modeToggle.querySelector('.active').classList.remove('active');
-    selBtn.classList.add('active');
-  });
 });
 
 for (const el of document.querySelectorAll('input[list]')) el.addEventListener('focus', () => el.select());
