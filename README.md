@@ -6,6 +6,8 @@ Chrome extension that translates web pages using Google Cloud Translation API. B
 
 **Homepage:** [yaku.vlad.studio](https://yaku.vlad.studio)
 
+<img src="shots/2.png" width="640">
+
 ## Features
 
 - Translate any web page with one click

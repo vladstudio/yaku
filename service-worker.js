@@ -78,6 +78,12 @@ function updateBadge(tabId, progress) {
   chrome.action.setBadgeBackgroundColor({ color: '#E55E1A', tabId });
 }
 
+function setLanguageBadge(tabId, langCode) {
+  const text = (langCode || '').slice(0, 2).toUpperCase();
+  chrome.action.setBadgeText({ text, tabId });
+  chrome.action.setBadgeBackgroundColor({ color: '#E55E1A', tabId });
+}
+
 function resetBadge(tabId) {
   chrome.action.setBadgeText({ text: '', tabId });
 }
@@ -107,6 +113,7 @@ async function activateInTab(tabId, state) {
   state.progress = 0;
   state.pendingDeferred = 0;
   state.error = null;
+  setLanguageBadge(tabId, state.to);
   notifyState(tabId);
   await persistTabState();
 
@@ -203,7 +210,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         state.progress = 1;
         state.pendingDeferred = msg.pendingDeferred || 0;
         state.error = null;
-        resetBadge(tabId);
+        setLanguageBadge(tabId, state.to);
       } else if (msg.type === 'yaku-error') {
         state.status = 'error';
         state.error = msg.error;
