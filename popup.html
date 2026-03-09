@@ -2,135 +2,24 @@
 <html>
 <head>
 <meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
 <style>
-:root {
-  --bg: #fff;
-  --text: #1a1a1a;
-  --text-dim: #666;
-  --text-muted: #999;
-  --text-mid: #555;
-  --input-bg: #fff;
-  --input-border: #ccc;
-  --border: #ddd;
-  --border-light: #eee;
-  --accent: #E55E1A;
-  --accent-hover: #d9612a;
-  --cancel: #888;
-  --cancel-hover: #666;
-  --error: #c33;
-  --focus: rgba(248, 108, 38, 0.2);
-  --chip-add: #aaa;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1e1e1e;
-    --text: #ddd;
-    --text-dim: #aaa;
-    --text-muted: #777;
-    --text-mid: #aaa;
-    --input-bg: #2a2a2a;
-    --input-border: #444;
-    --border: #444;
-    --border-light: #333;
-    --accent: #d4601f;
-    --accent-hover: #b8521a;
-    --cancel: #555;
-    --cancel-hover: #777;
-    --error: #e55;
-    --focus: rgba(212, 96, 31, 0.3);
-    --chip-add: #666;
-  }
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  width: 260px;
-  font: 13px/1.4 -apple-system, system-ui, sans-serif;
-  padding: 12px;
-  color: var(--text);
-  background: var(--bg);
-}
+body { width: 300px; font-size: 13px; }
 .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
-label { font-size: 11px; color: var(--text-dim); min-width: 34px; }
-input[type="text"] {
-  flex: 1;
-  padding: 4px 6px;
-  border: 1px solid var(--input-border);
-  border-radius: 4px;
-  font-size: 12px;
-  background: var(--input-bg);
-  color: var(--text);
-  min-width: 0;
-}
-button {
-  width: 100%;
-  padding: 7px;
-  border: none;
-  border-radius: 5px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  color: #fff;
-  background: var(--accent);
-}
-button:hover { background: var(--accent-hover); }
-button.cancel { background: var(--cancel); }
-button.cancel:hover { background: var(--cancel-hover); }
-button:disabled { opacity: 0.5; cursor: default; }
-.status {
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-mid);
-  margin-top: 8px;
-}
-.status a {
-  color: var(--accent);
-  cursor: pointer;
-  text-decoration: underline;
-}
-.error { color: var(--error); font-size: 12px; text-align: center; margin-top: 6px; }
-.settings {
-  margin-top: 10px;
-  border-top: 1px solid var(--border-light);
-  padding-top: 8px;
-}
-.settings-toggle {
-  width: auto;
-  background: none;
-  color: var(--text-muted);
-  font-size: 11px;
-  padding: 2px 0;
-  font-weight: 400;
-}
-.settings-toggle:hover { background: none; color: var(--text-dim); }
-*:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
-.api-key-row {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
-.api-key-row input {
-  flex: 1;
-  padding: 4px 6px;
-  border: 1px solid var(--input-border);
-  border-radius: 4px;
-  font-size: 11px;
-  font-family: monospace;
-  background: var(--input-bg);
-  color: var(--text);
-}
-.api-key-row button {
-  width: auto;
-  padding: 4px 10px;
-  font-size: 11px;
-}
+label { min-width: 34px; font-size: 11px; }
+input[type="text"] { flex: 1; min-width: 0; }
+button { width: 100%; }
+button.subtle { width: auto; }
+.status { text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.status a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.error { margin-top: 6px; }
+.settings { margin-top: 10px; border-top: 1px solid var(--border-light); padding-top: 8px; }
+.api-key-row { display: flex; gap: 6px; margin-top: 6px; }
+.api-key-row input { flex: 1; font-size: 11px; font-family: monospace; }
+.api-key-row button { width: auto; padding: 4px 10px; font-size: 11px; }
 [hidden] { display: none !important; }
-.favs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
-.favs span { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; white-space: nowrap; color: var(--text-mid); }
-.favs span:hover { border-color: var(--accent); color: var(--accent); }
 .favs span b { display: none; font-weight: normal; margin-left: 2px; font-size: 9px; }
 .favs span:hover b { display: inline; }
-.favs span.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.favs span.add { border-style: dashed; color: var(--chip-add); }
 </style>
 </head>
 <body>
@@ -145,13 +34,13 @@ button:disabled { opacity: 0.5; cursor: default; }
       <input type="text" id="to" list="toList" placeholder="Language">
       <datalist id="toList"></datalist>
     </div>
-    <div class="favs" id="favs"></div>
+    <div class="chips favs" id="favs"></div>
   </div>
   <button id="btn">Translate</button>
   <div class="status" id="status"></div>
   <div class="settings">
-    <button class="settings-toggle" id="settingsToggle">API Key</button>
-    <a href="https://yaku.vlad.studio/" target="_blank" class="settings-toggle" style="float:right">yaku</a>
+    <button class="subtle" id="settingsToggle">API Key</button>
+    <a href="https://yaku.vlad.studio/" target="_blank" class="subtle" style="float:right">yaku</a>
     <div id="settingsPanel" hidden>
       <div class="api-key-row">
         <input type="password" id="apiKeyInput" placeholder="Google Cloud API key">

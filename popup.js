@@ -249,8 +249,8 @@ function renderFavs(favs) {
     const lang = LANGUAGES.find(l => l[0] === code);
     if (!lang) continue;
     const chip = document.createElement('span');
+    chip.className = 'chip' + (toEl.value === lang[1] ? ' active' : '');
     chip.append(lang[2]);
-    if (toEl.value === lang[1]) chip.className = 'active';
     chip.onclick = () => { toEl.value = lang[1]; renderFavs(favs); updateBtn(); };
     const x = Object.assign(document.createElement('b'), { textContent: '✕' });
     x.onclick = (e) => { e.stopPropagation(); saveFavs(favs.filter(c => c !== code)); };
@@ -258,7 +258,7 @@ function renderFavs(favs) {
     favsEl.append(chip);
   }
   if (favs.length < 4) {
-    const add = Object.assign(document.createElement('span'), { textContent: '+', className: 'add' });
+    const add = Object.assign(document.createElement('span'), { textContent: '+', className: 'chip dashed' });
     add.onclick = () => {
       const code = resolveLanguage(toEl);
       if (code && !favs.includes(code)) saveFavs([...favs, code]);

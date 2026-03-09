@@ -1,0 +1,209 @@
+/* vlad.studio extension base · v1 */
+
+/* --- Reset --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* --- Tokens (light) --- */
+:root {
+  --bg: #fff;
+  --text: #363336;
+  --text-muted: #777;
+  --accent: #F2752F;
+  --accent-hover: #d9612a;
+  --accent-subtle: rgba(242, 117, 47, 0.12);
+  --accent-selected: rgba(242, 117, 47, 0.33);
+  --border: #ddd;
+  --border-light: #eee;
+  --input-bg: #fff;
+  --input-border: #ccc;
+  --focus: rgba(242, 117, 47, 0.25);
+  --error: #c33;
+}
+
+/* --- Tokens (dark) --- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #2C2D30;
+    --text: #F2F3F4;
+    --text-muted: #999;
+    --accent: #d4601f;
+    --accent-hover: #b8521a;
+    --accent-subtle: rgba(212, 96, 31, 0.14);
+    --accent-selected: rgba(212, 96, 31, 0.35);
+    --border: #444;
+    --border-light: #38383E;
+    --input-bg: #2a2a2a;
+    --input-border: #444;
+    --focus: rgba(212, 96, 31, 0.3);
+    --error: #e55;
+  }
+}
+
+/* --- Base elements --- */
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Oxygen-Sans, Ubuntu, Cantarell,
+    "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  border-bottom: 2px solid var(--accent);
+}
+
+a {
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+}
+a:hover {
+  color: var(--accent);
+}
+
+hr {
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  margin: 8px 0;
+}
+
+img {
+  max-width: 100%;
+}
+
+*:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* --- Inputs --- */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="url"],
+input[type="search"],
+textarea,
+select {
+  padding: 4px 6px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+textarea {
+  resize: vertical;
+}
+
+label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* --- Buttons --- */
+button, .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #fff;
+  background: var(--accent);
+  line-height: 1.25;
+}
+button:hover, .btn:hover {
+  background: var(--accent-hover);
+}
+button:disabled, .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Ghost button — transparent bg, accent on hover */
+.ghost {
+  background: none;
+  color: var(--text);
+}
+.ghost:hover {
+  background: var(--accent-subtle);
+  color: var(--text);
+}
+.ghost.selected {
+  background: var(--accent-selected);
+}
+
+/* Subtle/link-style button or link */
+.subtle {
+  background: none;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 11px;
+  padding: 2px 0;
+  text-decoration: none;
+}
+.subtle:hover {
+  background: none;
+  color: var(--text);
+}
+
+/* Small variant for buttons */
+button.small, .btn.small {
+  padding: 4px 6px;
+}
+
+/* --- Chips --- */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: none;
+  font-weight: 400;
+}
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: none;
+}
+.chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.chip.dashed {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+/* --- Utilities --- */
+.center { text-align: center; }
+.light, .light * { color: var(--text-muted); }
+.small { font-size: 12px; }
+.error { color: var(--error); font-size: 12px; text-align: center; }
+.flex { display: flex; }
+.flex-1 { flex: 1 1 0%; }
+.flex > .flex-0 { flex: 0; }
+.f-center { align-items: center; justify-content: center; }
+.gap-4 { gap: 4px; }
+.gap-8 { gap: 8px; }
