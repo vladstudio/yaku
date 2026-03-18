@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Yaku — Page Translator",
-  "version": "0.2.2",
+  "version": "1.0.1",
   "description": "Translate web pages using Google Cloud Translation API. Bring your own API key.",
   "homepage_url": "https://yaku.vlad.studio",
   "icons": {
@@ -22,11 +22,21 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["translator.js", "content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "translator.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["activeTab", "storage"],
-  "host_permissions": ["https://translation.googleapis.com/*"]
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://translation.googleapis.com/*"
+  ]
 }

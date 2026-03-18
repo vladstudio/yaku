@@ -6,6 +6,18 @@
     'SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE', 'TEXTAREA', 'INPUT', 'SVG',
   ]);
 
+  const TRANSLATABLE_ATTRS = new Map([
+    ['placeholder', new Set(['INPUT', 'TEXTAREA'])],
+    ['title', null],
+    ['alt', new Set(['IMG', 'AREA', 'INPUT'])],
+    ['label', new Set(['OPTION', 'OPTGROUP', 'TRACK'])],
+    ['aria-label', null],
+    ['aria-placeholder', null],
+  ]);
+
+  const ATTR_NAMES = [...TRANSLATABLE_ATTRS.keys()];
+  const ATTR_SELECTOR = ATTR_NAMES.map(a => `[${a}]`).join(',');
+
   const BLOCK_ELEMENTS = new Set([
     'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'BODY', 'DD', 'DIV', 'DL',
     'DT', 'FIELDSET', 'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM',
@@ -23,6 +35,8 @@
   let originals = new WeakMap();  // node -> original textContent
   let originalNodes = new Set();  // track nodes for restore iteration
   let dirtyTranslatedNodes = new WeakSet(); // translated nodes changed by page scripts
+  let originalAttrs = new WeakMap();     // element -> Map<attr, originalValue>
+  let originalAttrElements = new Set();  // track elements for restore
   let translator = null;
   let observer = null;
   let visibilityObserver = null;
@@ -192,6 +206,32 @@
     return normalized;
   }
 
+  function collectTranslatableAttrs(root) {
+    const items = [];
+    if (!root || !root.isConnected) return items;
+
+    const startEl = root.nodeType === Node.ELEMENT_NODE ? root : root.parentElement;
+    if (!startEl) return items;
+
+    const elements = startEl.querySelectorAll(ATTR_SELECTOR);
+    const candidates = startEl.matches?.(ATTR_SELECTOR)
+      ? [startEl, ...elements]
+      : [...elements];
+
+    for (const el of candidates) {
+      for (const [attr, allowedTags] of TRANSLATABLE_ATTRS) {
+        if (allowedTags && !allowedTags.has(el.tagName)) continue;
+        const val = el.getAttribute(attr);
+        if (!val || !val.trim()) continue;
+        const existing = originalAttrs.get(el);
+        if (existing?.has(attr)) continue;
+        items.push({ element: el, attr, text: val.trim() });
+      }
+    }
+
+    return items;
+  }
+
   function partitionBlocksByViewport(blocks) {
     const inViewport = [];
     const deferred = [];
@@ -241,30 +281,42 @@
       for (let i = 0; i < batch.length; i++) {
         const item = batch[i];
         const translatedText = translations[i];
-        const node = item.node;
-        if (typeof translatedText !== 'string' || !node?.isConnected) continue;
+        if (typeof translatedText !== 'string') continue;
 
-        if (!originals.has(node)) {
-          originals.set(node, node.nodeValue);
-          originalNodes.add(node);
-        } else if (dirtyTranslatedNodes.has(node)) {
-          // Track the most recent source text so "Stop" restores correctly.
-          originals.set(node, node.nodeValue);
-          dirtyTranslatedNodes.delete(node);
-        }
+        if (item.attr) {
+          const el = item.element;
+          if (!el?.isConnected) continue;
+          if (!originalAttrs.has(el)) originalAttrs.set(el, new Map());
+          const map = originalAttrs.get(el);
+          if (!map.has(item.attr)) {
+            map.set(item.attr, el.getAttribute(item.attr));
+            originalAttrElements.add(el);
+          }
+          try { el.setAttribute(item.attr, translatedText); } catch {}
+        } else {
+          const node = item.node;
+          if (!node?.isConnected) continue;
 
-        try {
-          node.nodeValue = `${item.leadingWhitespace}${translatedText}${item.trailingWhitespace}`;
-        } catch {
-          // Ignore disconnected nodes
+          if (!originals.has(node)) {
+            originals.set(node, node.nodeValue);
+            originalNodes.add(node);
+          } else if (dirtyTranslatedNodes.has(node)) {
+            originals.set(node, node.nodeValue);
+            dirtyTranslatedNodes.delete(node);
+          }
+
+          try {
+            node.nodeValue = `${item.leadingWhitespace}${translatedText}${item.trailingWhitespace}`;
+          } catch {}
         }
       }
     } finally {
+      if (observer) observer.takeRecords(); // discard our own mutations
       resumeObserver();
     }
   }
 
-  async function translateBlocks(blocks, onProgress) {
+  async function translateBlocks(blocks, onProgress, attrItems) {
     if (!translator) return 0;
 
     const normalized = normalizeBlocks(blocks);
@@ -288,6 +340,13 @@
           leadingWhitespace,
           trailingWhitespace,
         });
+      }
+    }
+
+    if (attrItems) {
+      for (const ai of attrItems) {
+        if (!ai.element?.isConnected) continue;
+        items.push({ attr: ai.attr, element: ai.element, text: ai.text });
       }
     }
 
@@ -385,12 +444,13 @@
     sendStatus({ type: 'yaku-deferred', pending: pendingVisibilityBlocks.size });
   }
 
-  function enqueueBlockTranslation(blocks) {
-    if (!blocks.length || !translator) return;
+  function enqueueBlockTranslation(blocks, attrItems = []) {
+    if (!blocks.length && !attrItems.length) return;
+    if (!translator) return;
 
     const work = async () => {
       if (abortController?.signal.aborted || !translator) return;
-      await translateBlocks(blocks);
+      await translateBlocks(blocks, null, attrItems);
     };
 
     translationQueue = translationQueue
@@ -426,17 +486,19 @@
     if (!roots.length) return;
 
     const blocks = [];
+    const attrItems = [];
     for (const root of roots) {
       if (!root.isConnected) continue;
       blocks.push(...collectBlocks(root));
+      attrItems.push(...collectTranslatableAttrs(root));
     }
 
     const normalized = normalizeBlocks(blocks);
-    if (!normalized.length) return;
+    if (!normalized.length && !attrItems.length) return;
 
     const { inViewport, deferred } = partitionBlocksByViewport(normalized);
     if (deferred.length) addDeferredBlocks(deferred);
-    if (inViewport.length) enqueueBlockTranslation(inViewport);
+    if (inViewport.length || attrItems.length) enqueueBlockTranslation(inViewport, attrItems);
   }
 
   function startObserver() {
@@ -458,6 +520,11 @@
             dirtyTranslatedNodes.add(mutation.target);
           }
           queueMutationRoot(mutation.target);
+        } else if (mutation.type === 'attributes') {
+          const el = mutation.target;
+          const map = originalAttrs.get(el);
+          if (map) map.delete(mutation.attributeName);
+          queueMutationRoot(el);
         }
       }
     });
@@ -466,6 +533,8 @@
       childList: true,
       subtree: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ATTR_NAMES,
     });
   }
 
@@ -502,6 +571,17 @@
     }
     originals = new WeakMap();
     originalNodes.clear();
+
+    for (const el of originalAttrElements) {
+      const map = originalAttrs.get(el);
+      if (!map) continue;
+      for (const [attr, val] of map) {
+        try { el.setAttribute(attr, val); } catch {}
+      }
+    }
+    originalAttrs = new WeakMap();
+    originalAttrElements.clear();
+
     resumeObserver();
   }
 
@@ -556,7 +636,7 @@
     if (isTranslating) return;
 
     // Restore originals before re-translating so we always translate from source text
-    if (originalNodes.size > 0) {
+    if (originalNodes.size > 0 || originalAttrElements.size > 0) {
       revertNodes();
       stopObserver();
       stopVisibilityObserver();
@@ -607,10 +687,11 @@
       const root = document.body || document.documentElement;
       const allBlocks = normalizeBlocks(collectBlocks(root));
       const { inViewport, deferred } = partitionBlocksByViewport(allBlocks);
+      const attrItems = collectTranslatableAttrs(root);
 
       await translateBlocks(inViewport, (progress) => {
         sendStatus({ type: 'yaku-progress', progress });
-      });
+      }, attrItems);
 
       addDeferredBlocks(deferred);
       pendingDeferred = pendingVisibilityBlocks.size;
