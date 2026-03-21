@@ -74,15 +74,6 @@
     );
   }
 
-  function isHiddenForTraversal(el, cache) {
-    if (!el) return true;
-    if (cache?.has(el)) return cache.get(el);
-
-    const hidden = isHiddenByAttributes(el) || hasHiddenStyle(el);
-    cache?.set(el, hidden);
-    return hidden;
-  }
-
   function findNearestBlockAncestor(el) {
     let current = el;
     while (current && current !== document.documentElement) {
@@ -129,7 +120,6 @@
       ? findNearestBlockAncestor(startElement)
       : document.body;
 
-    const hiddenCache = new WeakMap();
     const blockMap = new Map();
     const stack = [{ node: root, block: initialBlock }];
 
@@ -149,7 +139,7 @@
       if (node.nodeType !== Node.ELEMENT_NODE) continue;
 
       const el = node;
-      if (shouldSkipElement(el) || isHiddenForTraversal(el, hiddenCache)) continue;
+      if (shouldSkipElement(el)) continue;
 
       let currentBlock = block;
       if (isBlockElement(el)) currentBlock = el;
@@ -238,8 +228,7 @@
 
     for (const block of blocks) {
       const visibility = getElementVisibility(block.element, VIEWPORT_MARGIN_PX);
-      if (!visibility.renderable) continue;
-      if (visibility.inViewport) inViewport.push(block);
+      if (visibility.inViewport || !visibility.renderable) inViewport.push(block);
       else deferred.push(block);
     }
 
