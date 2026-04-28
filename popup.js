@@ -8,41 +8,31 @@ const LANGUAGES = [
   ['ar', 'Arabic', 'العربية'],
   ['hy', 'Armenian', 'Հայերեն'],
   ['az', 'Azerbaijani', 'Azərbaycan'],
-  ['eu', 'Basque', 'Euskara'],
   ['be', 'Belarusian', 'Беларуская'],
   ['bn', 'Bengali', 'বাংলা'],
   ['bs', 'Bosnian', 'Bosanski'],
   ['bg', 'Bulgarian', 'Български'],
-  ['ca', 'Catalan', 'Català'],
   ['ceb', 'Cebuano', 'Cebuano'],
   ['zh', 'Chinese', '中文'],
-  ['co', 'Corsican', 'Corsu'],
   ['hr', 'Croatian', 'Hrvatski'],
   ['cs', 'Czech', 'Čeština'],
   ['da', 'Danish', 'Dansk'],
   ['nl', 'Dutch', 'Nederlands'],
   ['en', 'English', 'English'],
-  ['eo', 'Esperanto', 'Esperanto'],
   ['et', 'Estonian', 'Eesti'],
   ['fi', 'Finnish', 'Suomi'],
   ['fr', 'French', 'Français'],
-  ['fy', 'Frisian', 'Frysk'],
-  ['gl', 'Galician', 'Galego'],
   ['ka', 'Georgian', 'ქართული'],
   ['de', 'German', 'Deutsch'],
   ['el', 'Greek', 'Ελληνικά'],
   ['gu', 'Gujarati', 'ગુજરાતી'],
   ['ht', 'Haitian Creole', 'Kreyòl Ayisyen'],
   ['ha', 'Hausa', 'Hausa'],
-  ['haw', 'Hawaiian', 'ʻŌlelo Hawaiʻi'],
   ['he', 'Hebrew', 'עברית'],
   ['hi', 'Hindi', 'हिन्दी'],
-  ['hmn', 'Hmong', 'Hmong'],
   ['hu', 'Hungarian', 'Magyar'],
-  ['is', 'Icelandic', 'Íslenska'],
   ['ig', 'Igbo', 'Igbo'],
   ['id', 'Indonesian', 'Bahasa Indonesia'],
-  ['ga', 'Irish', 'Gaeilge'],
   ['it', 'Italian', 'Italiano'],
   ['ja', 'Japanese', '日本語'],
   ['jv', 'Javanese', 'Jawa'],
@@ -54,22 +44,17 @@ const LANGUAGES = [
   ['ku', 'Kurdish', 'Kurdî'],
   ['ky', 'Kyrgyz', 'Кыргызча'],
   ['lo', 'Lao', 'ລາວ'],
-  ['la', 'Latin', 'Latina'],
   ['lv', 'Latvian', 'Latviešu'],
   ['lt', 'Lithuanian', 'Lietuvių'],
-  ['lb', 'Luxembourgish', 'Lëtzebuergesch'],
   ['mk', 'Macedonian', 'Македонски'],
   ['mg', 'Malagasy', 'Malagasy'],
   ['ms', 'Malay', 'Bahasa Melayu'],
   ['ml', 'Malayalam', 'മലയാളം'],
-  ['mt', 'Maltese', 'Malti'],
-  ['mi', 'Maori', 'Māori'],
   ['mr', 'Marathi', 'मराठी'],
   ['mn', 'Mongolian', 'Монгол'],
   ['my', 'Myanmar', 'ဗမာ'],
   ['ne', 'Nepali', 'नेपाली'],
   ['no', 'Norwegian', 'Norsk'],
-  ['ny', 'Nyanja', 'Chichewa'],
   ['or', 'Odia', 'ଓଡ଼ିଆ'],
   ['ps', 'Pashto', 'پښتو'],
   ['fa', 'Persian', 'فارسی'],
@@ -78,11 +63,7 @@ const LANGUAGES = [
   ['pa', 'Punjabi', 'ਪੰਜਾਬੀ'],
   ['ro', 'Romanian', 'Română'],
   ['ru', 'Russian', 'Русский'],
-  ['sm', 'Samoan', 'Gagana Sāmoa'],
-  ['gd', 'Scots Gaelic', 'Gàidhlig'],
   ['sr', 'Serbian', 'Српски'],
-  ['st', 'Sesotho', 'Sesotho'],
-  ['sn', 'Shona', 'Shona'],
   ['sd', 'Sindhi', 'سنڌي'],
   ['si', 'Sinhala', 'සිංහල'],
   ['sk', 'Slovak', 'Slovenčina'],
@@ -105,11 +86,7 @@ const LANGUAGES = [
   ['ug', 'Uyghur', 'ئۇيغۇرچە'],
   ['uz', 'Uzbek', 'Oʻzbek'],
   ['vi', 'Vietnamese', 'Tiếng Việt'],
-  ['cy', 'Welsh', 'Cymraeg'],
-  ['xh', 'Xhosa', 'isiXhosa'],
-  ['yi', 'Yiddish', 'ייִדיש'],
   ['yo', 'Yoruba', 'Yorùbá'],
-  ['zu', 'Zulu', 'isiZulu'],
 ];
 
 // Lookup: English name → code, code → English name
@@ -118,12 +95,6 @@ const CODE_TO_NAME = {};
 for (const [code, name] of LANGUAGES) {
   NAME_TO_CODE[name] = code;
   CODE_TO_NAME[code] = name;
-}
-
-// Map ISO codes to language names for Tetra args.targetLang
-const CODE_TO_LANG_NAME = {};
-for (const [code, , native] of LANGUAGES) {
-  CODE_TO_LANG_NAME[code] = native;
 }
 
 const controlsEl = document.getElementById('controls');
