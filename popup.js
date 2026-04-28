@@ -120,6 +120,12 @@ for (const [code, name] of LANGUAGES) {
   CODE_TO_NAME[code] = name;
 }
 
+// Map ISO codes to language names for Tetra args.targetLang
+const CODE_TO_LANG_NAME = {};
+for (const [code, , native] of LANGUAGES) {
+  CODE_TO_LANG_NAME[code] = native;
+}
+
 const controlsEl = document.getElementById('controls');
 const fromEl = document.getElementById('from');
 const toEl = document.getElementById('to');
@@ -128,10 +134,7 @@ const toList = document.getElementById('toList');
 const btn = document.getElementById('btn');
 const statusEl = document.getElementById('status');
 const favsEl = document.getElementById('favs');
-const settingsToggle = document.getElementById('settingsToggle');
-const settingsPanel = document.getElementById('settingsPanel');
-const apiKeyInput = document.getElementById('apiKeyInput');
-const apiKeySave = document.getElementById('apiKeySave');
+const tetraStatusEl = document.getElementById('tetraStatus');
 let activeTabId = null;
 
 function populateLists(detectedLang) {
@@ -160,11 +163,8 @@ function updateDetectedPlaceholder(detectedLang) {
 function resolveLanguage(input) {
   const val = input.value.trim();
   if (!val) return null;
-  // Exact English name match
   if (NAME_TO_CODE[val]) return NAME_TO_CODE[val];
-  // Exact code match
   if (CODE_TO_NAME[val]) return val;
-  // Case-insensitive name match
   const lower = val.toLowerCase();
   for (const [code, name] of LANGUAGES) {
     if (name.toLowerCase() === lower) return code;
@@ -176,7 +176,7 @@ function renderState(state) {
   const s = state.status;
   const isActive = !!state.active || s === 'detecting' || s === 'translating' || s === 'active' || s === 'done';
 
-  controlsEl.hidden = isActive || !hasApiKey;
+  controlsEl.hidden = isActive;
   statusEl.textContent = '';
 
   if (isActive) {
@@ -251,22 +251,22 @@ function renderFavs(favs) {
     const chip = document.createElement('span');
     chip.className = 'chip' + (toEl.value === lang[1] ? ' active' : '');
     chip.append(lang[2]);
-    chip.onclick = () => { toEl.value = lang[1]; renderFavs(favs); updateBtn(); };
+    chip.onclick = () => { toEl.value = lang[1]; renderFavs(favs || []); updateBtn(); };
     const x = Object.assign(document.createElement('b'), { textContent: '✕' });
-    x.onclick = (e) => { e.stopPropagation(); saveFavs(favs.filter(c => c !== code)); };
+    x.onclick = (e) => { e.stopPropagation(); saveFavs((favs || []).filter(c => c !== code)); };
     chip.append(x);
     favsEl.append(chip);
   }
-  if (favs.length < 4) {
+  if ((favs || []).length < 4) {
     const add = Object.assign(document.createElement('span'), { textContent: '+', className: 'chip dashed' });
     add.onclick = () => {
       const code = resolveLanguage(toEl);
-      if (code && !favs.includes(code)) saveFavs([...favs, code]);
+      if (code && !(favs || []).includes(code)) saveFavs([...(favs || []), code]);
     };
     favsEl.append(add);
   }
 }
-function saveFavs(favs) { chrome.storage.local.set({ favLangs: favs }); renderFavs(favs); }
+function saveFavs(favs) { chrome.storage.local.set({ favLangs: favs }); renderFavs(favs || []); }
 
 // Disable translate button when source and target languages match
 let detectedPageLang = null;
@@ -277,40 +277,21 @@ function updateBtn() {
   btn.disabled = !!(from && to && from === to);
 }
 
-// Settings
-let hasApiKey = false;
-
-settingsToggle.onclick = () => {
-  if (hasApiKey) settingsPanel.hidden = !settingsPanel.hidden;
-};
-
-apiKeySave.onclick = () => {
-  const key = apiKeyInput.value.trim();
-  if (key) {
-    chrome.storage.local.set({ apiKey: key });
-    setApiKeyState(true);
-  }
-};
-
-function setApiKeyState(has) {
-  hasApiKey = has;
-  if (has) {
-    controlsEl.hidden = false;
-    btn.hidden = false;
-    settingsPanel.hidden = true;
-    settingsToggle.textContent = 'API Key \u2713';
-  } else {
-    controlsEl.hidden = true;
-    btn.hidden = true;
-    settingsPanel.hidden = false;
-    settingsToggle.textContent = 'API Key';
-  }
+// Check Tetra connectivity (routed through service worker)
+function checkTetra() {
+  chrome.runtime.sendMessage({ type: 'tetra-ping' }, (res) => {
+    if (res?.ok) {
+      tetraStatusEl.textContent = 'connected';
+      tetraStatusEl.style.color = 'var(--accent)';
+    } else {
+      tetraStatusEl.textContent = 'offline';
+      tetraStatusEl.style.color = 'var(--error)';
+    }
+  });
 }
 
 // Init
-chrome.storage.local.get(['apiKey', 'favLangs', 'lastTargetLang'], ({ apiKey, favLangs, lastTargetLang }) => {
-  if (apiKey) apiKeyInput.value = apiKey;
-  setApiKeyState(!!apiKey);
+chrome.storage.local.get(['favLangs', 'lastTargetLang'], ({ favLangs, lastTargetLang }) => {
   const defaultLang = CODE_TO_NAME[lastTargetLang] || 'English';
 
   chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
@@ -327,6 +308,7 @@ chrome.storage.local.get(['apiKey', 'favLangs', 'lastTargetLang'], ({ apiKey, fa
   });
 
   renderFavs(favLangs || []);
+  checkTetra();
 });
 
 // Receive pushed state updates from service worker

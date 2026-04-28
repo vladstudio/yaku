@@ -9,14 +9,10 @@ body { width: 300px; font-size: 13px; }
 label { min-width: 34px; font-size: 11px; }
 input[type="text"] { flex: 1; min-width: 0; }
 button { width: 100%; }
-button.subtle { width: auto; }
 .status { text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .status a { color: var(--accent); cursor: pointer; text-decoration: underline; }
 .error { margin-top: 6px; }
 .settings { margin-top: 10px; border-top: 1px solid var(--border-light); padding-top: 8px; }
-.api-key-row { display: flex; gap: 6px; margin-top: 6px; }
-.api-key-row input { flex: 1; font-size: 11px; font-family: monospace; }
-.api-key-row button { width: auto; padding: 4px 10px; font-size: 11px; }
 [hidden] { display: none !important; }
 .favs span b { display: none; font-weight: normal; margin-left: 2px; font-size: 9px; }
 .favs span:hover b { display: inline; }
@@ -39,17 +35,8 @@ button.subtle { width: auto; }
   <button id="btn">Translate</button>
   <div class="status" id="status"></div>
   <div class="settings">
-    <button class="subtle" id="settingsToggle">API Key</button>
     <a href="https://yaku.vlad.studio/" target="_blank" class="subtle" style="float:right">yaku</a>
-    <div id="settingsPanel" hidden>
-      <div class="api-key-row">
-        <input type="password" id="apiKeyInput" placeholder="Google Cloud API key">
-        <button id="apiKeySave">Save</button>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:4px">
-        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--text-muted)">Get a key</a> &middot; <a href="https://console.developers.google.com/apis/api/translate.googleapis.com/overview" target="_blank" style="color:var(--text-muted)">Enable Cloud Translation API</a>
-      </div>
-    </div>
+    <span class="subtle">Tetra · <span id="tetraStatus">checking…</span></span>
   </div>
 <script src="popup.js"></script>
 </body>

@@ -1,14 +1,11 @@
 // service-worker.js — Background coordinator
-// Routes messages between popup and content scripts, manages badge icon
+// Routes messages between popup and content scripts, proxies Tetra API calls
 
-const API_BASE = 'https://translation.googleapis.com/language/translate/v2';
+const TETRA_BASE = 'http://localhost:24100';
 const SESSION_TAB_STATE_KEY = 'tabStateV2';
 
 const tabState = Object.create(null);
 let stateHydrationPromise = null;
-
-let cachedApiKey = null;
-let apiKeyLoaded = false;
 
 function createDefaultState() {
   return {
@@ -51,16 +48,13 @@ async function hydrateTabState() {
         tabState[tabId] = normalizeLoadedState(raw);
       }
 
-      // Drop stale states for tabs that no longer exist.
       const tabs = await chrome.tabs.query({});
       const live = new Set(tabs.map((tab) => tab.id));
       for (const key of Object.keys(tabState)) {
         const tabId = Number(key);
         if (!live.has(tabId)) delete tabState[tabId];
       }
-    } catch {
-      // Ignore storage/session failures.
-    }
+    } catch {}
   })();
 
   return stateHydrationPromise;
@@ -124,49 +118,47 @@ async function activateInTab(tabId, state) {
   }).catch(() => {});
 }
 
-async function getApiKey() {
-  if (apiKeyLoaded) return cachedApiKey;
-
-  const { apiKey } = await chrome.storage.local.get('apiKey');
-  cachedApiKey = apiKey || null;
-  apiKeyLoaded = true;
-  return cachedApiKey;
-}
-
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== 'local' || !changes.apiKey) return;
-  cachedApiKey = changes.apiKey.newValue || null;
-  apiKeyLoaded = true;
-});
-
 // Messages from content.js and popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = sender.tab?.id;
 
-  // API proxy for content scripts (no cross-origin fetch in MV3 content scripts)
+  // API proxy for content scripts — forward to Tetra
   if (msg.type === 'api-call') {
     (async () => {
       try {
-        const apiKey = await getApiKey();
-        if (!apiKey) {
-          sendResponse({ error: 'API key not set. Click API Key in the popup.' });
-          return;
-        }
+        const body = {
+          command: msg.command,
+          text: msg.text,
+        };
+        if (msg.args) body.args = msg.args;
 
-        const res = await fetch(`${API_BASE}${msg.endpoint}?key=${apiKey}`, {
+        const res = await fetch(`${TETRA_BASE}/transform`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(msg.body),
+          body: JSON.stringify(body),
         });
 
         const data = await res.json();
-        if (!res.ok) sendResponse({ error: data.error?.message || `API error: ${res.status}` });
-        else sendResponse({ data });
+        if (!res.ok) sendResponse({ error: data.error || `Tetra error: ${res.status}` });
+        else sendResponse({ data: data.result });
       } catch (e) {
         sendResponse({ error: e.message });
       }
     })();
 
+    return true;
+  }
+
+  // Tetra health check from popup
+  if (msg.type === 'tetra-ping') {
+    (async () => {
+      try {
+        const res = await fetch(`${TETRA_BASE}/commands`);
+        sendResponse({ ok: res.ok });
+      } catch {
+        sendResponse({ ok: false });
+      }
+    })();
     return true;
   }
 

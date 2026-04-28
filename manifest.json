@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Yaku — Page Translator",
   "version": "1.0.2",
-  "description": "Translate web pages using Google Cloud Translation API. Bring your own API key.",
+  "description": "Translate web pages using a local LLM via Tetra.",
   "homepage_url": "https://yaku.vlad.studio",
   "icons": {
     "16": "icons/icon-16.png",
@@ -38,6 +38,6 @@
     "storage"
   ],
   "host_permissions": [
-    "https://translation.googleapis.com/*"
+    "http://localhost:24100/*"
   ]
 }
