@@ -11,8 +11,6 @@ function createDefaultState() {
   return {
     active: false,
     status: 'idle',
-    detectedLang: null,
-    from: 'auto',
     to: 'en',
     progress: 0,
     pendingDeferred: 0,
@@ -103,7 +101,7 @@ function setInactive(state, tabId) {
 async function activateInTab(tabId, state) {
   if (!state?.active) return;
 
-  state.status = 'detecting';
+  state.status = 'translating';
   state.progress = 0;
   state.pendingDeferred = 0;
   state.error = null;
@@ -113,7 +111,6 @@ async function activateInTab(tabId, state) {
 
   chrome.tabs.sendMessage(tabId, {
     type: 'activate',
-    from: state.from,
     to: state.to,
   }).catch(() => {});
 }
@@ -173,15 +170,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg.type === 'yaku-ready') {
         if (state.active) {
           await activateInTab(tabId, state);
-        } else {
-          chrome.tabs.sendMessage(tabId, { type: 'detect' }).catch(() => {});
         }
         return;
-      }
-
-      if (msg.type === 'yaku-detected') {
-        state.detectedLang = msg.language;
-      } else if (msg.type === 'yaku-status') {
+      } if (msg.type === 'yaku-status') {
         state.status = msg.status;
         state.error = null;
         if (msg.status === 'translating') {
@@ -197,7 +188,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'yaku-done') {
         state.active = true;
         state.status = 'active';
-        state.from = msg.from;
         state.to = msg.to;
         state.progress = 1;
         state.pendingDeferred = msg.pendingDeferred || 0;
@@ -242,7 +232,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       if (isActivate) {
         state.active = true;
-        state.from = msg.from || state.from || 'auto';
         state.to = msg.to || state.to || 'en';
         await activateInTab(activeTabId, state);
       } else {
@@ -264,13 +253,3 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   })();
 });
 
-// Request language detection for inactive tabs after top-level navigation.
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status !== 'complete') return;
-
-  (async () => {
-    await hydrateTabState();
-    const state = getState(tabId);
-    if (!state.active) chrome.tabs.sendMessage(tabId, { type: 'detect' }).catch(() => {});
-  })();
-});

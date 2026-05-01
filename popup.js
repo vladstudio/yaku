@@ -1,4 +1,4 @@
-// popup.js — Extension popup UI logic
+// popup.js
 
 // [code, English name, native name]
 const LANGUAGES = [
@@ -89,7 +89,6 @@ const LANGUAGES = [
   ['yo', 'Yoruba', 'Yorùbá'],
 ];
 
-// Lookup: English name → code, code → English name
 const NAME_TO_CODE = {};
 const CODE_TO_NAME = {};
 for (const [code, name] of LANGUAGES) {
@@ -98,9 +97,7 @@ for (const [code, name] of LANGUAGES) {
 }
 
 const controlsEl = document.getElementById('controls');
-const fromEl = document.getElementById('from');
 const toEl = document.getElementById('to');
-const fromList = document.getElementById('fromList');
 const toList = document.getElementById('toList');
 const btn = document.getElementById('btn');
 const statusEl = document.getElementById('status');
@@ -108,26 +105,11 @@ const favsEl = document.getElementById('favs');
 const tetraStatusEl = document.getElementById('tetraStatus');
 let activeTabId = null;
 
-function populateLists(detectedLang) {
-  fromList.innerHTML = '';
+function populateLists() {
   toList.innerHTML = '';
-
   for (const [code, name, native] of LANGUAGES) {
-    const searchHint = native !== name ? `${code} · ${native}` : code;
-    const opt = new Option(searchHint, name);
-    toList.append(opt);
-    fromList.append(opt.cloneNode(true));
-  }
-
-  updateDetectedPlaceholder(detectedLang);
-}
-
-function updateDetectedPlaceholder(detectedLang) {
-  if (detectedLang && detectedLang !== 'und') {
-    const detected = CODE_TO_NAME[detectedLang] || detectedLang;
-    fromEl.placeholder = `Auto-detect (${detected})`;
-  } else {
-    fromEl.placeholder = 'Auto-detect';
+    const hint = native !== name ? `${code} · ${native}` : code;
+    toList.append(new Option(hint, name));
   }
 }
 
@@ -137,15 +119,22 @@ function resolveLanguage(input) {
   if (NAME_TO_CODE[val]) return NAME_TO_CODE[val];
   if (CODE_TO_NAME[val]) return val;
   const lower = val.toLowerCase();
-  for (const [code, name] of LANGUAGES) {
+  for (const [code, name] of LANGUAGES)
     if (name.toLowerCase() === lower) return code;
-  }
   return null;
+}
+
+function showError(msg) {
+  statusEl.textContent = '';
+  const el = document.createElement('span');
+  el.className = 'error';
+  el.textContent = msg;
+  statusEl.append(el);
 }
 
 function renderState(state) {
   const s = state.status;
-  const isActive = !!state.active || s === 'detecting' || s === 'translating' || s === 'active' || s === 'done';
+  const isActive = !!state.active || s === 'translating' || s === 'active' || s === 'done';
 
   controlsEl.hidden = isActive;
   statusEl.textContent = '';
@@ -156,56 +145,24 @@ function renderState(state) {
     btn.className = 'cancel';
     btn.disabled = false;
     btn.onclick = doStop;
-    if (s === 'detecting') {
-      statusEl.textContent = 'Detecting page language';
-    } else if (s === 'translating') {
-      statusEl.textContent = `Translating to ${langName}`;
-    } else if (s === 'error') {
-      const errSpan = document.createElement('span');
-      errSpan.className = 'error';
-      errSpan.textContent = state.error || 'Translation failed.';
-      statusEl.append(errSpan);
-    } else {
-      statusEl.textContent = `Active in ${langName}.`;
-    }
+    if (s === 'translating') statusEl.textContent = `Translating to ${langName}`;
+    else if (s === 'error') showError(state.error || 'Translation failed.');
+    else statusEl.textContent = `Active in ${langName}.`;
   } else {
     btn.textContent = 'Translate';
     btn.className = '';
     btn.disabled = false;
     btn.onclick = doTranslate;
-    if (s === 'error') {
-      const errSpan = document.createElement('span');
-      errSpan.className = 'error';
-      errSpan.textContent = state.error || 'Translation failed.';
-      statusEl.append(errSpan);
-    }
+    if (s === 'error') showError(state.error || 'Translation failed.');
   }
 }
 
 function doTranslate() {
-  const from = fromEl.value.trim() ? resolveLanguage(fromEl) : 'auto';
   const to = resolveLanguage(toEl);
-
-  if (from === null) {
-    statusEl.textContent = '';
-    const err = document.createElement('span');
-    err.className = 'error';
-    err.textContent = 'Unknown source language.';
-    statusEl.append(err);
-    return;
-  }
-  if (!to) {
-    statusEl.textContent = '';
-    const err = document.createElement('span');
-    err.className = 'error';
-    err.textContent = 'Select a target language.';
-    statusEl.append(err);
-    return;
-  }
-
+  if (!to) return showError('Select a target language.');
   chrome.storage.local.set({ lastTargetLang: to });
-  chrome.runtime.sendMessage({ type: 'activate', from, to });
-  renderState({ active: true, status: 'detecting', to });
+  chrome.runtime.sendMessage({ type: 'activate', to });
+  renderState({ active: true, status: 'translating', to });
 }
 
 function doStop() {
@@ -213,8 +170,7 @@ function doStop() {
   renderState({ active: false, status: 'idle' });
 }
 
-// Favorites
-function renderFavs(favs) {
+function renderFavs(favs = []) {
   favsEl.innerHTML = '';
   for (const code of favs) {
     const lang = LANGUAGES.find(l => l[0] === code);
@@ -222,87 +178,55 @@ function renderFavs(favs) {
     const chip = document.createElement('span');
     chip.className = 'chip' + (toEl.value === lang[1] ? ' active' : '');
     chip.append(lang[2]);
-    chip.onclick = () => { toEl.value = lang[1]; renderFavs(favs || []); updateBtn(); };
+    chip.onclick = () => { toEl.value = lang[1]; renderFavs(favs); updateBtn(); };
     const x = Object.assign(document.createElement('b'), { textContent: '✕' });
-    x.onclick = (e) => { e.stopPropagation(); saveFavs((favs || []).filter(c => c !== code)); };
+    x.onclick = (e) => { e.stopPropagation(); saveFavs(favs.filter(c => c !== code)); };
     chip.append(x);
     favsEl.append(chip);
   }
-  if ((favs || []).length < 4) {
+  if (favs.length < 4) {
     const add = Object.assign(document.createElement('span'), { textContent: '+', className: 'chip dashed' });
     add.onclick = () => {
       const code = resolveLanguage(toEl);
-      if (code && !(favs || []).includes(code)) saveFavs([...(favs || []), code]);
+      if (code && !favs.includes(code)) saveFavs([...favs, code]);
     };
     favsEl.append(add);
   }
 }
-function saveFavs(favs) { chrome.storage.local.set({ favLangs: favs }); renderFavs(favs || []); }
 
-// Disable translate button when source and target languages match
-let detectedPageLang = null;
+function saveFavs(favs) { chrome.storage.local.set({ favLangs: favs }); renderFavs(favs); }
+
 function updateBtn() {
-  if (controlsEl.hidden) return;
-  const from = fromEl.value.trim() ? resolveLanguage(fromEl) : detectedPageLang;
-  const to = resolveLanguage(toEl);
-  btn.disabled = !!(from && to && from === to);
+  if (!controlsEl.hidden) btn.disabled = !resolveLanguage(toEl);
 }
 
-// Check Tetra connectivity (routed through service worker)
 function checkTetra() {
   chrome.runtime.sendMessage({ type: 'tetra-ping' }, (res) => {
-    if (res?.ok) {
-      tetraStatusEl.textContent = 'connected';
-      tetraStatusEl.style.color = 'var(--accent)';
-    } else {
-      tetraStatusEl.textContent = 'offline';
-      tetraStatusEl.style.color = 'var(--error)';
-    }
+    tetraStatusEl.textContent = res?.ok ? 'connected' : 'offline';
+    tetraStatusEl.style.color = res?.ok ? 'var(--accent)' : 'var(--error)';
   });
 }
 
 // Init
-chrome.storage.local.get(['favLangs', 'lastTargetLang'], ({ favLangs, lastTargetLang }) => {
+chrome.storage.local.get({ favLangs: [], lastTargetLang: '' }, ({ favLangs, lastTargetLang }) => {
   const defaultLang = CODE_TO_NAME[lastTargetLang] || 'English';
-
   chrome.runtime.sendMessage({ type: 'getState' }, (state) => {
-    detectedPageLang = state?.detectedLang ?? null;
-    populateLists(detectedPageLang);
-    if (state) {
-      if (state.from && state.from !== 'auto') fromEl.value = CODE_TO_NAME[state.from] || '';
-      toEl.value = CODE_TO_NAME[state.to] || defaultLang;
-      renderState(state);
-    } else {
-      toEl.value = defaultLang;
-    }
+    populateLists();
+    toEl.value = state ? (CODE_TO_NAME[state.to] || defaultLang) : defaultLang;
+    if (state) renderState(state);
     updateBtn();
   });
-
-  renderFavs(favLangs || []);
+  renderFavs(favLangs);
   checkTetra();
 });
 
-// Receive pushed state updates from service worker
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type !== 'yaku-state') return;
-  if (activeTabId == null || msg.tabId !== activeTabId) return;
-  if (!msg.state) return;
-
-  if (msg.state.detectedLang !== undefined && msg.state.detectedLang !== detectedPageLang) {
-    detectedPageLang = msg.state.detectedLang;
-    updateDetectedPlaceholder(detectedPageLang);
-  }
-
+  if (msg.type !== 'yaku-state' || activeTabId == null || msg.tabId !== activeTabId || !msg.state) return;
   renderState(msg.state);
   updateBtn();
 });
 
-// Track active tab for pushed state filtering
-chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-  if (!tab) return;
-  activeTabId = tab.id;
-});
+chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => { if (tab) activeTabId = tab.id; });
 
-for (const el of document.querySelectorAll('input[list]')) el.addEventListener('focus', () => el.select());
-fromEl.addEventListener('input', updateBtn);
-toEl.addEventListener('input', () => { updateBtn(); chrome.storage.local.get('favLangs', ({ favLangs }) => renderFavs(favLangs || [])); });
+document.querySelector('input[list]').addEventListener('focus', ({ target }) => target.select());
+toEl.addEventListener('input', () => { updateBtn(); chrome.storage.local.get({ favLangs: [] }, ({ favLangs }) => renderFavs(favLangs)); });

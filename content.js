@@ -44,8 +44,6 @@
 
   let isTranslating = false;
   let observerPaused = false;
-  let hasDetectedLanguage = false;
-  let detectInFlight = false;
 
   let translationQueue = Promise.resolve();
   let pendingVisibilityBlocks = new Map(); // element -> { element, nodeSet }
@@ -593,9 +591,7 @@
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg.type === 'detect') {
-      handleDetect();
-    } else if (msg.type === 'activate' || msg.type === 'translate') {
+    if (msg.type === 'activate' || msg.type === 'translate') {
       handleActivate(msg);
     } else if (msg.type === 'deactivate' || msg.type === 'cancel' || msg.type === 'restore') {
       if (abortController) abortController.abort();
@@ -605,21 +601,6 @@
 
     if (msg.type === 'hasSelection') sendResponse(false);
   });
-
-  async function handleDetect() {
-    if (detectInFlight) return;
-    detectInFlight = true;
-    try {
-      const result = await YakuTranslator.detectLanguage();
-      hasDetectedLanguage = true;
-      sendStatus({ type: 'yaku-detected', ...result });
-    } catch {
-      hasDetectedLanguage = true;
-      sendStatus({ type: 'yaku-detected', language: 'und', confidence: 0 });
-    } finally {
-      detectInFlight = false;
-    }
-  }
 
   async function handleActivate(msg) {
     if (isTranslating) return;
@@ -641,37 +622,9 @@
     const signal = abortController.signal;
 
     try {
-      let sourceLang = msg.from;
-      let pendingDeferred = 0;
-      if (sourceLang === 'auto') {
-        sendStatus({ type: 'yaku-status', status: 'detecting' });
-        const detected = await YakuTranslator.detectLanguage();
-        if (signal.aborted) {
-          isTranslating = false;
-          abortController = null;
-          return;
-        }
-
-        sourceLang = detected.language;
-        hasDetectedLanguage = true;
-        if (sourceLang === 'und') {
-          sendStatus({ type: 'yaku-error', error: 'Could not detect page language.' });
-          isTranslating = false;
-          abortController = null;
-          return;
-        }
-
-        sendStatus({ type: 'yaku-detected', language: sourceLang, confidence: detected.confidence });
-      }
-
-      if (signal.aborted) {
-        isTranslating = false;
-        abortController = null;
-        return;
-      }
-
-      translator = YakuTranslator.create(sourceLang, msg.to);
+      translator = YakuTranslator.create(msg.to);
       sendStatus({ type: 'yaku-status', status: 'translating' });
+      let pendingDeferred = 0;
 
       const root = document.body || document.documentElement;
       const allBlocks = normalizeBlocks(collectBlocks(root));
@@ -687,7 +640,7 @@
 
       if (!signal.aborted) {
         startObserver();
-        sendStatus({ type: 'yaku-done', from: sourceLang, to: msg.to, pendingDeferred });
+        sendStatus({ type: 'yaku-done', to: msg.to, pendingDeferred });
       }
     } catch (e) {
       if (!signal.aborted) {
@@ -698,11 +651,6 @@
     isTranslating = false;
     abortController = null;
   }
-
-  // Fallback detect in case the worker's initial detect message was missed.
-  setTimeout(() => {
-    if (!hasDetectedLanguage && !isTranslating) handleDetect();
-  }, 1500);
 
   sendStatus({ type: 'yaku-ready' });
 })();
