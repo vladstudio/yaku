@@ -103,6 +103,7 @@ const btn = document.getElementById('btn');
 const statusEl = document.getElementById('status');
 const favsEl = document.getElementById('favs');
 const tetraStatusEl = document.getElementById('tetraStatus');
+const resetCacheEl = document.getElementById('resetCache');
 let activeTabId = null;
 
 function populateLists() {
@@ -230,3 +231,4 @@ chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => { if (tab) a
 
 document.querySelector('input[list]').addEventListener('focus', ({ target }) => target.select());
 toEl.addEventListener('input', () => { updateBtn(); chrome.storage.local.get({ favLangs: [] }, ({ favLangs }) => renderFavs(favLangs)); });
+resetCacheEl.addEventListener('click', () => { chrome.storage.local.remove('yaku-cache-v1'); resetCacheEl.textContent = 'Done'; setTimeout(() => resetCacheEl.textContent = 'Reset', 1500); });
