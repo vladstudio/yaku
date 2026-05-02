@@ -28,8 +28,8 @@
 
   const VIEWPORT_MARGIN_PX = 200;
   const MUTATION_DEBOUNCE_MS = 120;
-  const BATCH_MAX_CHARS = 4000;
-  const BATCH_MAX_BLOCKS = 40;
+  const BATCH_MAX_CHARS = 15000;
+  const BATCH_MAX_BLOCKS = 100;
   const BATCH_CONCURRENCY = 3;
 
   let originals = new WeakMap();  // node -> original textContent
